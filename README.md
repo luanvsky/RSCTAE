@@ -14,7 +14,7 @@ Dicas rápidas
 - Para IA avançada, configure GEMINI_API_KEY; sem ela o app usa regras internas.
 
 ---
+# [Acesse aqui](https://rsctae.vercel.app/)
 
-Link do app (deploy): https://ais-pre-rxxw4xraqndg73w5bkb6jj-213322120758.us-east1.run.app
+[***](https://ais-pre-rxxw4xraqndg73w5bkb6jj-213322120758.us-east1.run.app)
 
-Repositório: https://github.com/luanvsky/RSCTAE
