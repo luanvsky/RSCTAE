@@ -17,4 +17,3 @@ Dicas rápidas
 # [Acesse aqui](https://rsctae.vercel.app/)
 
 [***](https://ais-pre-rxxw4xraqndg73w5bkb6jj-213322120758.us-east1.run.app)
-
