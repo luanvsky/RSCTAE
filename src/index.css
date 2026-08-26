@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm 12mm 15mm 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10pt !important;
+    line-height: 1.35 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* 1. Hide interactive elements, buttons, navigation, modals, side suggestions */
+  button,
+  nav,
+  header,
+  #btn-info-decreto,
+  #btn-export-dossier,
+  #btn-process-autonomously,
+  .no-print,
+  .print\:hidden,
+  .modal-backdrop,
+  [role="dialog"],
+  [role="tooltip"],
+  .tooltip {
+    display: none !important;
+  }
+
+  /* Remove all digital shadows and decorative borders */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Transform dark-themed banners into clean high-contrast light borders (ink-saving) */
+  .bg-slate-900,
+  .bg-slate-950,
+  .bg-slate-800 {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border: 1pt solid #cbd5e1 !important;
+  }
+
+  .bg-slate-900 *,
+  .bg-slate-950 *,
+  .bg-slate-800 * {
+    color: #0f172a !important;
+  }
+
+  /* 2. Precision Table Pagination & Page Break Handling */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    margin-top: 6pt !important;
+    margin-bottom: 10pt !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  thead tr,
+  thead th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    border-bottom: 1.5pt solid #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  tbody {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  th,
+  td {
+    padding: 3.5pt 5pt !important;
+    border: 0.5pt solid #cbd5e1 !important;
+    font-size: 8.5pt !important;
+    line-height: 1.25 !important;
+    color: #0f172a !important;
+    word-break: break-word !important;
+    vertical-align: top !important;
+  }
+
+  /* 3. Form Field and Empty Space Optimization */
+  input,
+  select,
+  textarea {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 0.5pt solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    padding: 1pt 0 !important;
+    margin: 0 !important;
+    font-family: inherit !important;
+    font-size: 9pt !important;
+    color: #000000 !important;
+    width: 100% !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+  }
+
+  /* Hide placeholder hints so they do not print like ghost text */
+  ::placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
+
+  /* Prevent empty form fields from taking unnecessary height or space */
+  input:placeholder-shown,
+  textarea:placeholder-shown,
+  input[value=""],
+  textarea:empty {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-bottom: 0.5pt dotted #cbd5e1 !important;
+  }
+
+  /* Empty decorative containers and helper alerts collapse to 0 height */
+  :empty:not(td):not(th):not(input) {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+  }
+
+  /* 4. Texto SEI and Long Textarea Expansion */
+  textarea {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    resize: none !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  pre {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  /* 5. Headings and Section Breaks */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    color: #000000 !important;
+  }
+
+  .avoid-break-inside {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

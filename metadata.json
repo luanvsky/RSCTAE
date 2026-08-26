@@ -1,0 +1,8 @@
+{
+  "name": "Remix Sistema Autônomo RSC-PCCTAE",
+  "description": "Sistema autônomo especialista na instrução do processo administrativo de Reconhecimento de Saberes e Competências (RSC-PCCTAE) conforme Decreto nº 13.048/2026 e regulamentações do PCCTAE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
