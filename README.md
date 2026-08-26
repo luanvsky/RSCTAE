@@ -15,3 +15,6 @@ Dicas rápidas
 
 ---
 
+Link do app (deploy): https://ais-pre-rxxw4xraqndg73w5bkb6jj-213322120758.us-east1.run.app
+
+Repositório: https://github.com/luanvsky/RSCTAE
