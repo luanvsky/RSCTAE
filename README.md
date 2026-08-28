@@ -19,7 +19,7 @@ Calcular os pontos e organizar os documentos para o RSC costuma exigir a leitura
 
 Não é necessário instalar nada no seu computador! Você pode acessar a ferramenta direto no navegador:
 
-👉 **[Acesse a ferramenta online clicando aqui](https://luanvsky.github.io/RSCTAE/)** 
+# 👉 **[Acesse a ferramenta online clicando aqui](https://rsctae.vercel.app)** 
 
 1. Preencha seus dados básicos no formulário inicial.
 2. Anexe ou insira as pontuações dos seus comprovantes e certificados.
