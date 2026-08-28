@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
 import { UploadAndExtractionPanel } from './components/UploadAndExtractionPanel';
 import { ResumoPontuacaoCard } from './components/ResumoPontuacaoCard';
@@ -388,6 +389,7 @@ export default function App() {
         onClose={() => setIsExportModalOpen(false)}
         processo={currentProcessoWithRecalc}
       />
+      <Analytics />
     </div>
   );
 }
