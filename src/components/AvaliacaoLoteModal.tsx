@@ -145,23 +145,31 @@ export const AvaliacaoLoteModal: React.FC<AvaliacaoLoteModalProps> = ({
               </div>
             </div>
 
-            {/* Score by Eixo Mini Bars */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60 text-xs">
+            {/* Score by Eixo Mini Bars (Eixos I a VI da Resolução CS/IFS nº 394/2026) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-2 border-t border-slate-200/60 text-xs">
               <div className="bg-white/80 p-2 rounded-lg border border-slate-200/70">
-                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo I: Qualificação</div>
-                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoI} pts</div>
+                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo I: Comissões</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoI || 0} pts</div>
               </div>
               <div className="bg-white/80 p-2 rounded-lg border border-slate-200/70">
-                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo II: Técnica</div>
-                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoII} pts</div>
+                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo II: Projetos</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoII || 0} pts</div>
               </div>
               <div className="bg-white/80 p-2 rounded-lg border border-slate-200/70">
-                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo III: Gestão</div>
-                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoIII} pts</div>
+                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo III: Premiações</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoIII || 0} pts</div>
               </div>
               <div className="bg-white/80 p-2 rounded-lg border border-slate-200/70">
-                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo IV: Ensino/Ext.</div>
-                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoIV} pts</div>
+                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo IV: Contratos/Sist.</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoIV || 0} pts</div>
+              </div>
+              <div className="bg-white/80 p-2 rounded-lg border border-slate-200/70">
+                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo V: Chefia/FG</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoV || 0} pts</div>
+              </div>
+              <div className="bg-white/80 p-2 rounded-lg border border-slate-200/70">
+                <div className="text-[10px] text-slate-500 font-medium truncate">Eixo VI: Patentes/INPI</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5">{resumoPorEixo.eixoVI || 0} pts</div>
               </div>
             </div>
           </div>
@@ -284,7 +292,7 @@ export const AvaliacaoLoteModal: React.FC<AvaliacaoLoteModalProps> = ({
                           {isNaoCabivel && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
                               <XCircle className="w-3 h-3" />
-                              NÃO CABÍVEL (0 pts)
+                              DESCARTADO / NÃO CABÍVEL (0 pts)
                             </span>
                           )}
                         </div>
@@ -294,6 +302,13 @@ export const AvaliacaoLoteModal: React.FC<AvaliacaoLoteModalProps> = ({
                       <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
                         {doc.descricaoIdentificada}
                       </p>
+
+                      {doc.motivoDescarte && (
+                        <div className="mt-1.5 px-2.5 py-1 rounded bg-rose-50 border border-rose-200/80 text-[11px] text-rose-800 font-medium flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <span><strong>Motivo do Descarte:</strong> {doc.motivoDescarte}</span>
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-slate-500">
                         <span className="inline-flex items-center gap-1 font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">

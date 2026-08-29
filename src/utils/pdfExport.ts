@@ -260,14 +260,17 @@ export function buildProcessoPdfDocument(processo: ProcessoRSC): jsPDF {
   doc.text('4 QUADRO ANALÍTICO DE COMPROVANTES E ENQUADRAMENTO (ANEXOS I A VI)', marginL, currentY);
   currentY += 3;
 
-  const tableRows = (indexacaoComprovantes || []).map((item, idx) => [
-    (idx + 1).toString(),
-    `${item.eixo.split(' - ')[0]}\n(${item.itemCriterio})`,
-    item.descricaoAtividade,
-    item.documentoCorrespondente,
-    `${item.quantidadeInformada || 1} ${item.unidadeMedida || ''}`,
-    `${Number(item.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts`,
-  ]);
+  const tableRows = (indexacaoComprovantes || []).map((item, idx) => {
+    const justif = item.justificativaMemorial ? `\n[Justificativa: ${item.justificativaMemorial}]` : '';
+    return [
+      (idx + 1).toString(),
+      `${item.eixo.split(' - ')[0]}\n(${item.itemCriterio})`,
+      `${item.descricaoAtividade}${justif}`,
+      item.documentoCorrespondente,
+      `${item.quantidadeInformada || 1} ${item.unidadeMedida || ''}`,
+      `${Number(item.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts`,
+    ];
+  });
 
   autoTable(doc, {
     startY: currentY,

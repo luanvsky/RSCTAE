@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Award, Download, BookOpen, FileText, Check } from 'lucide-react';
+import { Award, Download, BookOpen, FileText, Check, Trash2, RotateCcw } from 'lucide-react';
 import { ProcessoRSC } from '../types';
 import { mockDossiers } from '../data/mockDossiers';
 import { exportProcessoToPdf } from '../utils/pdfExport';
@@ -10,6 +10,7 @@ interface HeaderProps {
   onOpenExportModal: () => void;
   onSelectPreset: (id: string) => void;
   onNewBlankDossier: () => void;
+  onOpenClearModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,6 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExportModal,
   onSelectPreset,
   onNewBlankDossier,
+  onOpenClearModal,
 }) => {
   const [pdfDownloaded, setPdfDownloaded] = useState(false);
 
@@ -60,12 +62,16 @@ export const Header: React.FC<HeaderProps> = ({
               value={processo.id}
               onChange={(e) => {
                 if (e.target.value === 'novo-em-branco') {
-                  onNewBlankDossier();
+                  if (onOpenClearModal) {
+                    onOpenClearModal();
+                  } else {
+                    onNewBlankDossier();
+                  }
                 } else {
                   onSelectPreset(e.target.value);
                 }
               }}
-              className="text-xs bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none cursor-pointer max-w-[170px] sm:max-w-[220px] truncate"
+              className="text-xs bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none cursor-pointer max-w-[150px] sm:max-w-[200px] truncate"
             >
               {mockDossiers.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -77,6 +83,18 @@ export const Header: React.FC<HeaderProps> = ({
               </option>
             </select>
           </div>
+
+          {/* Limpar Tudo Button */}
+          <button
+            id="btn-clear-all"
+            type="button"
+            onClick={onOpenClearModal || onNewBlankDossier}
+            className="text-xs font-semibold text-rose-700 hover:text-rose-800 hover:bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+            title="Limpar todos os campos e reiniciar o requerimento em branco"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span className="hidden sm:inline">Limpar Tudo</span>
+          </button>
 
           <button
             id="btn-info-decreto"

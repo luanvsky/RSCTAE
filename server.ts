@@ -54,11 +54,14 @@ function evaluateFilesWithRules(
   let somaEixoV = 0;
   let somaEixoVI = 0;
 
+  // Track distinct processed commissions, contracts, systems, and roles to prevent bis in idem (Art. 7º, § 2º)
+  const registeredKeys = new Set<string>();
+
   files.forEach((file, index) => {
     const lower = (file.name + ' ' + (file.textContent || '')).toLowerCase();
     const id = `doc-${Date.now()}-${index + 1}`;
 
-    let tipo = 'Documento Comprobatório Geral';
+    let tipo = 'Documento Comprobatório';
     let veredito: 'CABIVEL' | 'NAO_CABIVEL' | 'CABIVEL_PARCIAL' = 'CABIVEL';
     let eixo = 'I - Comissões e Grupos de Trabalho';
     let artigo = 'Anexo I, Item 3';
@@ -68,135 +71,404 @@ function evaluateFilesWithRules(
     let pontosPorUnid = 3.0;
     let qtd = 1;
     let pontos = 3.0;
-    let pontosMax = 30.0;
+    let pontosMax = 15.0;
     let justificativa = '';
     let orientacao = '';
+    let motivoDescarte = '';
+    let ehDocumentoDesnecessario = false;
 
-    // Check for invalid or ineligible files
+    // 1. Descarte estrito: Documentos estritamente cadastrais ou pessoais
     if (
       lower.includes('comprovante_residencia') ||
+      lower.includes('comprovante_endereco') ||
       lower.includes('rg_') ||
       lower.includes('cpf_') ||
       lower.includes('titulo_eleitor') ||
       lower.includes('cnh_') ||
       lower.includes('contracheque') ||
-      lower.includes('holerite')
+      lower.includes('holerite') ||
+      lower.includes('declaracao_bens') ||
+      lower.includes('certidao_nascimento') ||
+      lower.includes('certidao_casamento')
     ) {
-      tipo = 'Documento Pessoal / Não Avaliável para RSC';
+      tipo = 'Documento Pessoal / Cadastral (Não Pontuável)';
       veredito = 'NAO_CABIVEL';
       eixo = 'I - Comissões e Grupos de Trabalho';
       artigo = 'Não enquadrável na Resolução CS/IFS nº 394/2026';
-      descricao = 'Documento de identificação ou funcional pessoal não pontuável no âmbito de competências do RSC.';
+      descricao = 'Documento de identificação ou funcional de cunho estritamente cadastral.';
       cargaHoraria = 'N/A';
       pontos = 0;
       pontosMax = 0;
-      justificativa = 'Documentos de cunho estritamente cadastral ou pessoal não constituem saberes ou competências pontuáveis no PCCTAE.';
-      orientacao = 'Mantenha este documento no dossiê de identificação funcional, mas não o inclua na tabela de pontuação do Bloco 4.';
-    } else if (lower.includes('patente') || lower.includes('inpi') || lower.includes('registro_software') || lower.includes('software_registro')) {
-      tipo = 'Depósito de Propriedade Intelectual / INPI';
-      veredito = 'CABIVEL';
+      ehDocumentoDesnecessario = true;
+      motivoDescarte = 'Documentos estritamente cadastrais ou pessoais (RG, CPF, Comprovante de Residência, Contracheque) não constituem saberes ou competências do RSC-PCCTAE.';
+      justificativa = 'Art. 2º da Resolução CS/IFS nº 394/2026: O RSC reconhece o saber não instituído resultante da atuação profissional no cargo. Documentos cadastrais devem ser mantidos apenas no assentamento funcional, devendo ser descartados da tabela de pontuação.';
+      orientacao = 'Descartar do cômputo de pontuação do Bloco 4.';
+    }
+    // 2. Descarte estrito: Portarias de rotina funcional ordinária sem encargo diferenciado
+    else if (
+      lower.includes('ferias') ||
+      lower.includes('licenca_premio') ||
+      lower.includes('licenca_capacitacao') ||
+      lower.includes('licenca_medica') ||
+      lower.includes('atestado') ||
+      lower.includes('progressao_merito') ||
+      lower.includes('progressao_capacitacao_iq') ||
+      lower.includes('incentivo_qualificacao_anterior') ||
+      lower.includes('concessao_diarias') ||
+      lower.includes('relacao_tarefas_rotina')
+    ) {
+      tipo = 'Portaria de Rotina Ordinária / Benefício Já Usufruído';
+      veredito = 'NAO_CABIVEL';
+      eixo = 'I - Comissões e Grupos de Trabalho';
+      artigo = 'Art. 2º e Art. 7º, § 2º da Resolução CS/IFS nº 394/2026';
+      descricao = 'Ato ordinário de rotina funcional ou evento já computado para concessão de progressão/IQ anterior.';
+      cargaHoraria = 'N/A';
+      pontos = 0;
+      pontosMax = 0;
+      ehDocumentoDesnecessario = true;
+      motivoDescarte = 'Atos de gestão rotineira (férias, licenças, concessões usuais) ou títulos já utilizados para Incentivo à Qualificação formal (vedação ao bis in idem).';
+      justificativa = 'Resolução CS/IFS nº 394/2026, Art. 7º, § 2º: Vedada a utilização simultânea de atividades ou títulos já computados. Portarias de rotina não representam desempenho diferenciado.';
+      orientacao = 'Descarte recomendado para manter o dossiê enxuto e estritamente aderente.';
+    }
+    // 3. Descarte / Rigor: Eventos e palestras < 10h ou de ouvinte sem avaliação
+    else if (
+      lower.includes('palestra_1h') ||
+      lower.includes('palestra_2h') ||
+      lower.includes('webinar_') ||
+      lower.includes('ouvinte_') ||
+      lower.includes('live_') ||
+      lower.includes('participacao_evento_sem_ch') ||
+      lower.includes('curso_4h') ||
+      lower.includes('curso_6h') ||
+      lower.includes('curso_8h')
+    ) {
+      tipo = 'Evento de Curta Duração / Ouvinte (< 10h)';
+      veredito = 'NAO_CABIVEL';
+      eixo = 'II - Projetos, Pesquisa e Extensão';
+      artigo = 'Anexo II, Itens 9 e 11 da Resolução CS/IFS nº 394/2026';
+      descricao = 'Participação em palestras ou minicursos com carga horária inferior a 10 horas.';
+      cargaHoraria = 'Menos de 10 horas';
+      pontos = 0;
+      pontosMax = 0;
+      ehDocumentoDesnecessario = true;
+      motivoDescarte = 'Carga horária inferior ao piso mínimo de 10 horas exigido pela norma.';
+      justificativa = 'Resolução CS/IFS nº 394/2026, Anexo II, Itens 9 e 11: Fixa expressamente a exigência de carga horária mínima de 10 horas para cômputo de capacitações e eventos.';
+      orientacao = 'Descartar do cômputo ou agrupar apenas se integrar módulo estruturado > 10h com certificado unificado.';
+    }
+    // 4. Rigor em Portarias de Prorrogação / Aditivo / Recondução (Evitar excesso de pontuação)
+    else if (
+      lower.includes('prorrogacao') ||
+      lower.includes('aditivo_prazo') ||
+      lower.includes('reconducao_comissao') ||
+      lower.includes('alteracao_membros') ||
+      lower.includes('revogacao') ||
+      lower.includes('substituicao_membro')
+    ) {
+      tipo = 'Portaria Acessória de Prorrogação / Recondução';
+      veredito = 'NAO_CABIVEL';
+      eixo = 'I - Comissões e Grupos de Trabalho';
+      artigo = 'Art. 7º, § 2º da Resolução CS/IFS nº 394/2026';
+      descricao = `Ato acessório de prorrogação/alteração referente ao documento ${file.name}`;
+      cargaHoraria = 'Ato vinculado à portaria originária';
+      pontos = 0;
+      pontosMax = 0;
+      ehDocumentoDesnecessario = true;
+      motivoDescarte = 'Portaria de prorrogação ou alteração de comissão/contrato cujo ato principal já foi pontuado (vedação ao duplo cômputo).';
+      justificativa = 'Resolução CS/IFS nº 394/2026, Art. 7º, § 2º: A pontuação de comissões e contratos é calculada por unidade de comissão instituída ou por contrato individual, e NÃO a cada portaria sucessiva de prorrogação de prazo ou substituição de membros.';
+      orientacao = 'Juntar como anexo comprobatório de vigência da portaria originária, sem somar pontos adicionais.';
+    }
+    // 5. Depósitos no INPI / Patentes / Registros de Software (Anexo VI, Item 2)
+    else if (lower.includes('patente') || lower.includes('inpi') || lower.includes('registro_software') || lower.includes('software_registro') || lower.includes('ativo_tecnologico')) {
+      const key = 'inpi_propriedade_intelectual';
+      if (registeredKeys.has(key)) {
+        tipo = 'Depósito INPI Adicional';
+        veredito = 'CABIVEL_PARCIAL';
+        pontos = 15.0;
+      } else {
+        registeredKeys.add(key);
+        tipo = 'Depósito de Propriedade Intelectual / INPI';
+        veredito = 'CABIVEL';
+        pontos = 25.0;
+      }
       eixo = 'VI - Produção Científica e Tecnológica';
       artigo = 'Anexo VI, Item 2 (Depósitos no INPI)';
       descricao = `Registro ou depósito de propriedade intelectual / software no INPI: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
       unidade = 'Por projeto';
       pontosPorUnid = 25.0;
       qtd = 1;
-      pontos = 25.0;
       pontosMax = 50.0;
       justificativa = 'Resolução CS/IFS 394/2026, Anexo VI, Item 2: Depósito de patente ou software no INPI confere 25,00 pontos por projeto.';
       orientacao = 'Anexar o certificado de depósito com número do processo INPI expedido em favor da IFE.';
-    } else if (lower.includes('contrato') || lower.includes('fiscal') || lower.includes('fiscalizacao') || lower.includes('gestor_contrato')) {
-      tipo = 'Portaria de Gestão e Fiscalização de Contratos';
-      veredito = 'CABIVEL';
-      eixo = 'IV - Responsabilidades e Contratos';
-      artigo = 'Anexo IV, Item 3 (Gestão e Fiscalização de Contratos)';
-      descricao = `Gestão ou fiscalização de contratos institucionais e convênios: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
-      unidade = 'Por contrato';
-      pontosPorUnid = 4.5;
-      qtd = lower.includes('10') ? 10 : lower.includes('5') ? 5 : 2;
-      pontos = pontosPorUnid * qtd;
-      pontosMax = 50.0;
-      justificativa = `Resolução CS/IFS 394/2026, Anexo IV, Item 3: Gestão ou fiscalização de contratos confere 4,50 pts por contrato (${qtd} contrato(s) = ${pontos} pts).`;
-      orientacao = 'Anexar portarias de designação de fiscal titular/substituto publicadas no Boletim de Serviço.';
-    } else if (lower.includes('siafi') || lower.includes('scdp') || lower.includes('sistemas_estruturantes') || lower.includes('conformidade_registro')) {
-      tipo = 'Operação e Auditoria de Sistemas Estruturantes';
-      veredito = 'CABIVEL';
-      eixo = 'IV - Responsabilidades e Contratos';
-      artigo = 'Anexo IV, Item 1 (Sistemas Estruturantes Federais)';
-      descricao = `Operação e conformidade de sistemas federais estruturantes (SIAFI, SCDP, SIASG): ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
-      unidade = 'Por sistema';
-      pontosPorUnid = 4.5;
-      qtd = 2;
-      pontos = 9.0;
-      pontosMax = 15.0;
-      justificativa = 'Resolução CS/IFS 394/2026, Anexo IV, Item 1: Operação e suporte a sistemas estruturantes federais confere 4,50 pts por sistema.';
-      orientacao = 'Comprovar designação formal e perfil de conformista/operador homologado.';
-    } else if (lower.includes('fg-') || lower.includes('fg_') || lower.includes('cd-') || lower.includes('cd_') || lower.includes('chefia') || lower.includes('coordenador')) {
-      tipo = 'Exercício de Cargo de Direção ou Função Gratificada';
-      veredito = 'CABIVEL';
-      eixo = 'V - Cargos e Funções de Direção/Chefia';
+    }
+    // 6. Sistemas Estruturantes Federais (Anexo IV, Item 1)
+    else if (lower.includes('siafi') || lower.includes('scdp') || lower.includes('siasg') || lower.includes('sistemas_estruturantes') || lower.includes('conformidade_registro')) {
+      let sysName = 'SIAFI';
+      if (lower.includes('scdp')) sysName = 'SCDP';
+      else if (lower.includes('siasg')) sysName = 'SIASG';
+      const key = `sys_${sysName}`;
+
+      if (registeredKeys.has(key)) {
+        tipo = `Operação e Conformidade (${sysName}) - Documento Conexo`;
+        veredito = 'NAO_CABIVEL';
+        ehDocumentoDesnecessario = true;
+        pontos = 0;
+        motivoDescarte = `Cômputo do sistema ${sysName} já considerado no item principal (limite por sistema).`;
+        justificativa = `Anexo IV, Item 1: A pontuação de 4,50 pts é fixada por sistema operado. Múltiplas portarias do mesmo sistema não multiplicam pontos.`;
+        orientacao = 'Agrupar como comprovante anexo da operação do sistema.';
+      } else {
+        registeredKeys.add(key);
+        tipo = `Operação e Auditoria de Sistemas Estruturantes (${sysName})`;
+        veredito = 'CABIVEL';
+        eixo = 'IV - Responsabilidades e Contratos';
+        artigo = 'Anexo IV, Item 1 (Sistemas Estruturantes Federais)';
+        descricao = `Operação e conformidade do sistema federal estruturante ${sysName} com perfil homologado`;
+        unidade = 'Por sistema';
+        pontosPorUnid = 4.5;
+        qtd = 1;
+        pontos = 4.5;
+        pontosMax = 15.0;
+        justificativa = `Resolução CS/IFS 394/2026, Anexo IV, Item 1: Operação e suporte ao ${sysName} confere 4,50 pts por sistema.`;
+        orientacao = 'Comprovar designação formal e perfil de conformista/operador homologado.';
+      }
+    }
+    // 7. Fiscalização e Gestão de Contratos (Anexo IV, Item 3) - Rigor de 4,50 pts por contrato único
+    else if (lower.includes('contrato') || lower.includes('fiscal') || lower.includes('fiscalizacao') || lower.includes('gestor_contrato')) {
+      const matchContrato = lower.match(/contrato[_\s-]?n?([0-9]+)/);
+      const numContrato = matchContrato ? matchContrato[1] : `contrato_idx_${index}`;
+      const key = `contrato_${numContrato}`;
+
+      if (registeredKeys.has(key)) {
+        tipo = 'Portaria Acessória / Fiscalização do Mesmo Contrato';
+        veredito = 'NAO_CABIVEL';
+        ehDocumentoDesnecessario = true;
+        pontos = 0;
+        motivoDescarte = `Duplo cômputo: Fiscalização do Contrato nº ${numContrato} já pontuada em documento anterior.`;
+        justificativa = 'Resolução CS/IFS nº 394/2026, Anexo IV, Item 3: A pontuação é de 4,50 pontos por contrato individual fiscalizado, e não por cada portaria emitida para o mesmo contrato.';
+        orientacao = 'Manter como documento anexo do contrato sem somar pontuação duplicada.';
+      } else {
+        registeredKeys.add(key);
+        tipo = `Fiscalização e Gestão de Contrato (${matchContrato ? `Contrato nº ${numContrato}` : 'Contrato Institucional'})`;
+        veredito = 'CABIVEL';
+        eixo = 'IV - Responsabilidades e Contratos';
+        artigo = 'Anexo IV, Item 3 (Gestão e Fiscalização de Contratos)';
+        descricao = `Gestão e fiscalização de contrato institucional de serviços/fornecimento (${matchContrato ? `Contrato nº ${numContrato}` : file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')})`;
+        unidade = 'Por contrato';
+        pontosPorUnid = 4.5;
+        qtd = 1;
+        pontos = 4.5;
+        pontosMax = 30.0;
+        justificativa = 'Resolução CS/IFS 394/2026, Anexo IV, Item 3: Gestão ou fiscalização de contrato confere 4,50 pts por contrato fiscalizado.';
+        orientacao = 'Anexar a portaria de designação de fiscal titular/substituto e termo de encerramento/ateste.';
+      }
+    }
+    // 8. Exercício de Cargo de Direção (CD) ou Função Gratificada (FG) (Anexo V) - Rigor de cômputo anual
+    else if (lower.includes('fg-') || lower.includes('fg_') || lower.includes('cd-') || lower.includes('cd_') || lower.includes('chefia') || lower.includes('coordenador_') || lower.includes('diretor_')) {
       const isFG12 = lower.includes('fg-01') || lower.includes('fg-02') || lower.includes('fg01') || lower.includes('fg02');
-      artigo = isFG12 ? 'Anexo V, Item 3 (FG-01 e FG-02)' : 'Anexo V, Item 4 (FG-03 a FG-05)';
-      descricao = `Exercício de Função Gratificada / Chefia Institucional: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
-      unidade = 'Por ano ou fração > 6 meses';
-      pontosPorUnid = isFG12 ? 4.5 : 3.0;
-      qtd = 3;
-      pontos = pontosPorUnid * qtd;
-      pontosMax = 30.0;
-      justificativa = `Resolução CS/IFS 394/2026, Anexo V: Exercício de função gratificada confere ${pontosPorUnid} pts por ano (Total: ${pontos} pts).`;
-      orientacao = 'Anexar extrato de assentamento funcional emitido pela DGP ou portarias de nomeação e exoneração.';
-    } else if (lower.includes('comissao') || lower.includes('portaria') || lower.includes('conselho') || lower.includes('membro') || lower.includes('inventario') || lower.includes('pad')) {
-      tipo = 'Portaria de Comissão Institucional / Grupo de Trabalho';
-      veredito = 'CABIVEL';
-      eixo = 'I - Comissões e Grupos de Trabalho';
-      artigo = 'Anexo I, Item 3 (Membro Titular de Comissões)';
-      descricao = `Atuação como membro de comissões regularmente instituídas: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
-      unidade = 'Por designação';
-      pontosPorUnid = 3.0;
-      qtd = 3;
-      pontos = 9.0;
-      pontosMax = 30.0;
-      justificativa = 'Resolução CS/IFS 394/2026, Anexo I, Item 3: Participação como membro titular confere 3,00 pts por designação.';
-      orientacao = 'Verificar se constam as portarias emitidas pelo Reitor ou Diretor-Geral.';
-    } else if (lower.includes('projeto') || lower.includes('pesquisa') || lower.includes('extensao') || lower.includes('propex')) {
-      tipo = 'Coordenação ou Participação em Projetos Institucionais';
+      const isCD = lower.includes('cd-01') || lower.includes('cd-02') || lower.includes('cd-03') || lower.includes('cd-04');
+      const key = 'fg_cd_exercicio_chefia';
+
+      if (registeredKeys.has(key)) {
+        tipo = 'Portaria de Recondução / Designação da Mesma Chefia';
+        veredito = 'NAO_CABIVEL';
+        ehDocumentoDesnecessario = true;
+        pontos = 0;
+        motivoDescarte = 'Período de chefia/FG já considerado no item principal. Portarias de recondução não somam pontos adicionais sem comprovação de novos anos.';
+        justificativa = 'Resolução CS/IFS nº 394/2026, Anexo V: A pontuação de FG/CD é calculada por ano de efetivo exercício ou fração > 6 meses, e não por número de portarias emitidas.';
+        orientacao = 'Anexar certidão de tempo de serviço em cargo de chefia emitida pela DGP.';
+      } else {
+        registeredKeys.add(key);
+        tipo = isCD ? 'Exercício de Cargo de Direção (CD)' : isFG12 ? 'Exercício de Função Gratificada (FG-01/FG-02)' : 'Exercício de Função Gratificada (FG-03 a FG-05)';
+        veredito = 'CABIVEL';
+        eixo = 'V - Cargos e Funções de Direção/Chefia';
+        artigo = isCD ? 'Anexo V, Item 2 (CD-03/CD-04)' : isFG12 ? 'Anexo V, Item 3 (FG-01 e FG-02)' : 'Anexo V, Item 4 (FG-03 a FG-05)';
+        descricao = `Exercício de chefia/coordenação institucional (${isCD ? 'CD' : isFG12 ? 'FG-01/02' : 'FG-03/05'})`;
+        unidade = 'Por ano ou fração > 6 meses';
+        pontosPorUnid = isCD ? 7.5 : isFG12 ? 4.5 : 3.0;
+        // Rigor: default to 1-2 years verified, not arbitrarily inflated
+        qtd = lower.includes('36_meses') || lower.includes('3_anos') ? 3 : lower.includes('24_meses') || lower.includes('2_anos') ? 2 : 1;
+        pontos = pontosPorUnid * qtd;
+        pontosMax = 30.0;
+        justificativa = `Resolução CS/IFS 394/2026, Anexo V: Exercício de função confere ${pontosPorUnid} pts por ano comprovado (${qtd} ano(s) = ${pontos.toFixed(1).replace('.', ',')} pts).`;
+        orientacao = 'Anexar extrato de assentamento funcional emitido pela DGP atestando o período ininterrupto.';
+      }
+    }
+    // 9. Conselhos Superiores / Colegiados (Anexo I, Item 1)
+    else if (lower.includes('conselho_superior') || lower.includes('cs_ifs') || lower.includes('colegiado_campus') || lower.includes('consup')) {
+      const key = 'conselho_superior_colegiado';
+      if (registeredKeys.has(key)) {
+        tipo = 'Portaria Sucessiva de Conselho / Colegiado';
+        veredito = 'NAO_CABIVEL';
+        ehDocumentoDesnecessario = true;
+        pontos = 0;
+        motivoDescarte = 'Mandato de colegiado já pontuado na designação principal.';
+        justificativa = 'Resolução CS/IFS nº 394/2026, Anexo I, Item 1: Cômputo de 3,0 pts por ano de mandato.';
+        orientacao = 'Juntar como anexo do mandato.';
+      } else {
+        registeredKeys.add(key);
+        tipo = 'Membro de Conselho Superior / Colegiado da IFE';
+        veredito = 'CABIVEL';
+        eixo = 'I - Comissões e Grupos de Trabalho';
+        artigo = 'Anexo I, Item 1 (Conselhos Superiores / Colegiados)';
+        descricao = `Representação e membro titular em Colegiado / Conselho Superior da IFE`;
+        unidade = 'Por ano ou fração > 6 meses';
+        pontosPorUnid = 3.0;
+        qtd = 1;
+        pontos = 3.0;
+        pontosMax = 15.0;
+        justificativa = 'Resolução CS/IFS 394/2026, Anexo I, Item 1: Membro de Conselhos Superiores/Colegiados confere 3,00 pts por ano.';
+        orientacao = 'Anexar portaria de designação e ata de posse.';
+      }
+    }
+    // 10. Coordenação ou Presidência de Comissões / GTs (Anexo I, Item 2)
+    else if (lower.includes('presidente_comissao') || lower.includes('coordenador_comissao') || lower.includes('coordenador_gt') || lower.includes('presidente_pad')) {
+      const matchComissao = lower.match(/(?:comissao|gt|pad|cpa|cis)[_\s-]?([a-z0-9_]+)/);
+      const nomeComissao = matchComissao ? matchComissao[0] : `comissao_coord_${index}`;
+      const key = `coord_comissao_${nomeComissao}`;
+
+      if (registeredKeys.has(key)) {
+        tipo = 'Portaria de Recondução / Aditivo de Presidência de Comissão';
+        veredito = 'NAO_CABIVEL';
+        ehDocumentoDesnecessario = true;
+        pontos = 0;
+        motivoDescarte = `Duplicidade: Coordenação/Presidência da comissão "${nomeComissao}" já pontuada.`;
+        justificativa = 'Resolução CS/IFS nº 394/2026, Anexo I, Item 2: Pontuação de 4,50 pts por designação de comissão, e não por cada portaria de prorrogação.';
+        orientacao = 'Agrupar como ato anexo da comissão original.';
+      } else {
+        registeredKeys.add(key);
+        tipo = 'Coordenação ou Presidência de Comissão / GT / PAD';
+        veredito = 'CABIVEL';
+        eixo = 'I - Comissões e Grupos de Trabalho';
+        artigo = 'Anexo I, Item 2 (Coordenação/Presidência de Comissões e GTs)';
+        descricao = `Coordenação ou presidência de comissão institucional regularmente designada (${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')})`;
+        unidade = 'Por designação';
+        pontosPorUnid = 4.5;
+        qtd = 1;
+        pontos = 4.5;
+        pontosMax = 20.0;
+        justificativa = 'Resolução CS/IFS 394/2026, Anexo I, Item 2: Coordenação/Presidência de comissão confere 4,50 pts por designação.';
+        orientacao = 'Anexar portaria de designação da Reitoria/Diretoria e relatório final conclusivo dos trabalhos.';
+      }
+    }
+    // 11. Membro Titular de Comissões / GTs / Inventário / Sindicância (Anexo I, Item 3 ou 4)
+    else if (lower.includes('comissao') || lower.includes('membro') || lower.includes('inventario') || lower.includes('sindicancia') || lower.includes('pad') || lower.includes('cis') || lower.includes('cpa')) {
+      const matchComissao = lower.match(/(?:inventario|sindicancia|pad|cis|cpa|estagio|avaliacao|processo_seletivo)[_\s-]?([0-9]{4}|[0-9]+)?/);
+      const nomeComissao = matchComissao ? matchComissao[0] : `comissao_membro_${index}`;
+      const key = `membro_comissao_${nomeComissao}`;
+
+      if (registeredKeys.has(key)) {
+        tipo = 'Portaria de Prorrogação / Alteração de Membros de Comissão';
+        veredito = 'NAO_CABIVEL';
+        ehDocumentoDesnecessario = true;
+        pontos = 0;
+        motivoDescarte = `Duplicidade / Prorrogação: Participação na comissão "${nomeComissao}" já pontuada na portaria originária.`;
+        justificativa = 'Resolução CS/IFS nº 394/2026, Art. 7º, § 2º: Vedada a atribuição cumulativa de pontos a cada portaria de prorrogação ou alteração de membro da mesma comissão. Cômputo único por comissão constituída.';
+        orientacao = 'Anexar como folha complementar da portaria inicial sem soma duplicada.';
+      } else {
+        registeredKeys.add(key);
+        tipo = 'Membro Titular de Comissão Institucional / GT';
+        veredito = 'CABIVEL';
+        eixo = 'I - Comissões e Grupos de Trabalho';
+        artigo = 'Anexo I, Item 3 (Membro Titular de Comissões)';
+        descricao = `Membro titular de comissão institucional (${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')})`;
+        unidade = 'Por designação';
+        pontosPorUnid = 3.0;
+        qtd = 1;
+        pontos = 3.0;
+        pontosMax = 15.0;
+        justificativa = 'Resolução CS/IFS 394/2026, Anexo I, Item 3: Membro titular de comissão confere 3,00 pts por designação.';
+        orientacao = 'Verificar se consta a portaria de constituição e ata ou relatório final de conclusão.';
+      }
+    }
+    // 12. Projetos Institucionais de Ensino, Pesquisa, Extensão ou Inovação (Anexo II, Item 1 ou 2)
+    else if (lower.includes('projeto') || lower.includes('pesquisa') || lower.includes('extensao') || lower.includes('propex') || lower.includes('propip') || lower.includes('ppc')) {
+      const isCoord = lower.includes('coord') || lower.includes('lider');
+      const key = `projeto_inst_${index}`;
+      registeredKeys.add(key);
+
+      tipo = isCoord ? 'Coordenação de Projeto Institucional' : 'Participação Especializada em Projetos Institucionais';
       veredito = 'CABIVEL';
       eixo = 'II - Projetos, Pesquisa e Extensão';
-      artigo = 'Anexo II, Item 1 (Coordenação de Projetos)';
-      descricao = `Coordenação de projeto institucional de ensino, pesquisa, extensão ou inovação: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
+      artigo = isCoord ? 'Anexo II, Item 1 (Coordenação de Projetos)' : 'Anexo II, Item 2 (Participação em Projetos/PPCs)';
+      descricao = `${isCoord ? 'Coordenação' : 'Participação técnica'} em projeto de ensino, pesquisa, extensão ou gestão: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
       unidade = 'Por projeto';
-      pontosPorUnid = 7.5;
+      pontosPorUnid = isCoord ? 7.5 : 4.5;
       qtd = 1;
-      pontos = 7.5;
+      pontos = pontosPorUnid;
       pontosMax = 25.0;
-      justificativa = 'Resolução CS/IFS 394/2026, Anexo II, Item 1: Coordenação de projeto institucional confere 7,50 pts por projeto.';
-      orientacao = 'Anexar declaração de aprovação do projeto emitida pela Pró-Reitoria.';
-    } else if (lower.includes('premio') || lower.includes('elogio') || lower.includes('homenagem')) {
-      tipo = 'Premiação / Elogio Formal Institucional';
+      justificativa = `Resolução CS/IFS 394/2026, Anexo II: ${isCoord ? 'Coordenação' : 'Participação'} em projeto confere ${pontosPorUnid} pts por projeto homologado.`;
+      orientacao = 'Anexar declaração de aprovação ou relatório final emitido pela Pró-Reitoria competente.';
+    }
+    // 13. Premiações e Reconhecimento Público (Anexo III)
+    else if (lower.includes('premio') || lower.includes('elogio_formal') || lower.includes('homenagem_oficial')) {
+      tipo = 'Premiação / Elogio Formal por Projeto';
       veredito = 'CABIVEL';
       eixo = 'III - Premiações e Reconhecimento';
-      artigo = 'Anexo III, Item 3 (Premiação Local ou Institucional)';
-      descricao = `Premiação ou portaria de elogio formal por projetos na administração pública: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
+      artigo = 'Anexo III, Item 3 (Premiação/Elogio Local ou Institucional)';
+      descricao = `Premiação ou portaria de elogio formal institucional: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
       unidade = 'Por prêmio';
       pontosPorUnid = 7.5;
       qtd = 1;
       pontos = 7.5;
       pontosMax = 20.0;
-      justificativa = 'Resolução CS/IFS 394/2026, Anexo III, Item 3: Premiação ou elogio formal confere 7,50 pts.';
-      orientacao = 'Apresentar certificado ou publicação em boletim de serviço.';
-    } else {
-      tipo = 'Documento Comprobatório Geral';
+      justificativa = 'Resolução CS/IFS 394/2026, Anexo III, Item 3: Premiação ou elogio formal publicado por projeto na administração pública confere 7,50 pts.';
+      orientacao = 'Apresentar certidão de publicação no Boletim de Serviço ou certificado oficial.';
+    }
+    // 14. Elaboração de Manuais, Guias e Normas Técnicas (Anexo II, Item 6 ou Anexo VI, Item 12)
+    else if (lower.includes('manual') || lower.includes('guia_tecnico') || lower.includes('fluxograma') || lower.includes('roteiro_tecnico')) {
+      const key = 'manual_guia_tecnico';
+      if (registeredKeys.has(key)) {
+        tipo = 'Portaria / Atualização de Manual Já Pontuado';
+        veredito = 'NAO_CABIVEL';
+        ehDocumentoDesnecessario = true;
+        pontos = 0;
+        motivoDescarte = 'Manual ou guia técnico já pontuado na edição principal.';
+        justificativa = 'Anexo II, Item 6: A pontuação de 3,0 pts é atribuída por produto técnico concluído e homologado.';
+        orientacao = 'Juntar como anexo da publicação originária.';
+      } else {
+        registeredKeys.add(key);
+        tipo = 'Produção de Material Técnico de Referência / Manual';
+        veredito = 'CABIVEL';
+        eixo = 'II - Projetos, Pesquisa e Extensão';
+        artigo = 'Anexo II, Item 6 (Manuais e Roteiros Técnicos)';
+        descricao = `Elaboração e publicação de manual técnico institucional ou roteiro de procedimentos: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
+        unidade = 'Por produto';
+        pontosPorUnid = 3.0;
+        qtd = 1;
+        pontos = 3.0;
+        pontosMax = 15.0;
+        justificativa = 'Resolução CS/IFS 394/2026, Anexo II, Item 6: Produção de manual ou roteiro técnico de referência confere 3,00 pts por produto.';
+        orientacao = 'Anexar portaria de homologação ou exemplar do manual com código de publicação institucional.';
+      }
+    }
+    // 15. Cursos de Capacitação e Formação Continuada >= 10h (Anexo II, Item 9 ou 11)
+    else if (lower.includes('curso') || lower.includes('capacitacao') || lower.includes('enap') || lower.includes('certificado_')) {
+      tipo = 'Capacitação / Desenvolvimento de Competências (>= 10h)';
       veredito = 'CABIVEL';
+      eixo = 'II - Projetos, Pesquisa e Extensão';
+      artigo = 'Anexo II, Item 9 (Capacitação e Desenvolvimento de Competências)';
+      descricao = `Curso de capacitação profissional não utilizado para IQ: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
+      unidade = 'Por capacitação (mín. 10h)';
+      pontosPorUnid = 1.0;
+      qtd = 1;
+      pontos = 1.0;
+      pontosMax = 10.0;
+      justificativa = 'Resolução CS/IFS 394/2026, Anexo II, Item 9: Capacitação com carga horária igual ou superior a 10h não utilizada para concessão anterior confere 1,00 pt.';
+      orientacao = 'Verificar se o certificado explicita carga horária >= 10h e conteúdo programático.';
+    }
+    // 16. Documento residual geral com análise de rigor
+    else {
+      tipo = 'Documento Comprobatório em Análise de Rigor';
+      veredito = 'CABIVEL_PARCIAL';
       eixo = 'I - Comissões e Grupos de Trabalho';
-      artigo = 'Anexo I, Item 3';
-      descricao = `Atividade funcional comprovada: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
+      artigo = 'Anexo I, Item 3 (Membro de Comissões / GTs)';
+      descricao = `Atividade funcional identificada: ${file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}`;
       unidade = 'Por designação';
       pontosPorUnid = 3.0;
       qtd = 1;
       pontos = 3.0;
-      pontosMax = 15.0;
-      justificativa = 'Documento formalmente emitido com pertinência às atividades do PCCTAE.';
-      orientacao = 'Certifique-se de que a cópia digitalizada possui código de verificação digital.';
+      pontosMax = 10.0;
+      justificativa = 'Documento funcional admitido com reserva para confirmação de encargo específico pela Comissão Avaliadora.';
+      orientacao = 'Recomenda-se juntar cópia autenticada ou número de processo SEI com código de verificação para evitar glosa pela comissão.';
     }
 
     const docAvaliado = {
@@ -214,6 +486,8 @@ function evaluateFilesWithRules(
       pontosMaximosCriterio: pontosMax,
       justificativa,
       orientacaoAoServidor: orientacao,
+      motivoDescarte,
+      ehDocumentoDesnecessario,
       incluirNoProcesso: veredito !== 'NAO_CABIVEL',
     };
 
@@ -244,6 +518,8 @@ function evaluateFilesWithRules(
         justificativaLegal: justificativa,
         artigoDecreto: artigo,
         observacao: orientacao,
+        motivoDescarte: '',
+        ehDocumentoDesnecessario: false,
         incluidoNoDossie: true,
       });
     }
@@ -276,12 +552,14 @@ function evaluateFilesWithRules(
       ? 5
       : 7;
 
+  const docsDescartados = avaliados.filter((d) => d.veredito === 'NAO_CABIVEL').length;
+
   return {
     documentosAvaliados: avaliados,
     totalDocumentos: files.length,
     documentosCabiveis: avaliados.filter((d) => d.veredito === 'CABIVEL').length,
     documentosParciais: avaliados.filter((d) => d.veredito === 'CABIVEL_PARCIAL').length,
-    documentosNaoCabiveis: avaliados.filter((d) => d.veredito === 'NAO_CABIVEL').length,
+    documentosNaoCabiveis: docsDescartados,
     pontuacaoTotalValida: total,
     minimoExigido: minExigido,
     minimoCriteriosExigidos: minCrit,
@@ -297,7 +575,7 @@ function evaluateFilesWithRules(
       eixoV: somaEixoV,
       eixoVI: somaEixoVI,
     },
-    parecerGeral: `AVALIAÇÃO DE CONFORMIDADE (RESOLUÇÃO CS/IFS Nº 394/2026): Analisados ${files.length} documento(s). Total de ${avaliados.filter((d) => d.veredito !== 'NAO_CABIVEL').length} documento(s) com admissibilidade reconhecida, totalizando ${total.toFixed(1).replace('.', ',')} pontos válidos em ${validComprovantes.length} critérios (Mínimo para ${nivelDesejado}: ${minExigido} pts e ${minCrit} critérios). ${total >= minExigido ? 'Servidor atinge os requisitos para concessão, com saldo cumulativo assegurado pelo Art. 7º, § 1º.' : `Necessário complementar ${(minExigido - total).toFixed(1).replace('.', ',')} pontos.`}`,
+    parecerGeral: `AUDITORIA NORMATIVA DE RIGOR (RESOLUÇÃO CS/IFS Nº 394/2026):\nForam auditados ${files.length} documento(s). Após crivo rigoroso contra excesso de pontuação e vedação ao bis in idem (Art. 7º, § 2º), foram validados ${avaliados.filter((d) => d.veredito !== 'NAO_CABIVEL').length} documento(s) com admissibilidade reconhecida e ${docsDescartados} documento(s) foram DESCARTADOS (documentos pessoais, atos de rotina, prorrogações de comissão já pontuada ou cursos < 10h). Pontuação homologável apurada: ${total.toFixed(1).replace('.', ',')} pontos válidos em ${validComprovantes.length} critérios (Mínimo exigido para ${nivelDesejado}: ${minExigido} pts e ${minCrit} critérios). ${total >= minExigido && validComprovantes.length >= minCrit ? 'Servidor atinge integralmente os critérios objetivos para concessão.' : `Atenção: Saldo insuficiente (${(minExigido - total).toFixed(1).replace('.', ',')} pontos pendentes para o piso de ${minExigido} pts).`}`,
   };
 }
 
@@ -335,25 +613,41 @@ Texto pré-extraído / resumo: ${f.textContent || 'Sem texto prévio - analisar 
     }).join('\n\n');
 
     const prompt = `
-Você é a Comissão Avaliadora Especialista no Reconhecimento de Saberes e Competências (RSC-PCCTAE), instituído pelo Decreto Federal nº 13.048/2026.
+Você é a Comissão Especial de Avaliação de RSC-PCCTAE do Instituto Federal de Sergipe (IFS), julgando os documentos segundo a Resolução CS/IFS nº 394/2026 e Decreto Federal nº 13.048/2026.
 
-SUA TAREFA:
-Avaliar CADA UM dos ${files.length} documentos PDF enviados em lote pelo servidor para abertura do processo no SEI.
+SUA DIRETRIZ FUNDAMENTAL: RIGOR NORMATIVO MÁXIMO E COMBATE AO EXCESSO DE PONTUAÇÃO.
+O usuário alertou: NÃO avalie e não pontue toda e qualquer portaria cegamente. Seja estritamente criterioso. Descarte documentos desnecessários e duplicados.
 
-CRITÉRIOS DE ADMISSIBILIDADE E PONTUAÇÃO (DECRETO Nº 13.048/2026):
-- Eixo I - Formação e Qualificação: Cursos pós-graduação não usados em IQ (15-20 pts), Cursos de capacitação >= 120h (10-15 pts), Cursos 60h-119h (5-8 pts), Cursos 20h-59h (2-4 pts). Eventos de mera participação < 8h ou sem carga horária explícita são NÃO CABÍVEIS.
-- Eixo II - Produção Técnica e Tecnológica: Elaboração de manuais, normas, fluxogramas oficiais (10-15 pts), Softwares, painéis BI, sistemas (10-18 pts), Relatórios técnicos conclusivos e artigos (5-12 pts).
-- Eixo III - Gestão e Governança: Exercício de CD/FG de chefia (5-8 pts/ano), Participação em comissões permanentes CPA/CIS/PAD/Sindicância (3-6 pts), Coordenação de grupos de trabalho (4-8 pts).
-- Eixo IV - Extensão e Ensino: Instrutoria em cursos institucionais (5-10 pts), Tutoria/orientação de estágio (4-8 pts), Projetos de extensão (6-12 pts).
-- NÃO CABÍVEIS: Documentos meramente pessoais (RG, CPF, Comprovante de Residência, Contracheque/Holerite), palestras de 1-2h sem avaliação, documentos duplicados com benefício de Incentivo à Qualificação (vedação ao bis in idem).
+CRITÉRIOS DE DESCARTE E NÃO ADMISSIBILIDADE (RESOLUÇÃO CS/IFS Nº 394/2026):
+1. VEDAÇÃO AO BIS IN IDEM (Art. 7º, § 2º): Se houver múltiplas portarias para a MESMA comissão (ex: portaria de prorrogação de prazo, recondução, substituição de membro) ou para o MESMO contrato (aditivos, prorrogações), PONTUE APENAS UMA VEZ no ato principal. TODAS as demais portarias acessórias devem receber veredito "NAO_CABIVEL" com motivo de descarte "Duplicidade / Prorrogação da mesma comissão/contrato".
+2. ATRIBUIÇÃO ORDINÁRIA DO CARGO (Art. 2º): Portarias de férias, licença-prêmio, licença-médica, progressão por mérito ordinária, tarefas cotidianas sem encargo especial -> "NAO_CABIVEL", motivo: "Atividade de rotina / Não pontuável".
+3. DOCUMENTOS PESSOAIS / CADASTRAIS: RG, CPF, CNH, Comprovante de Residência, Contracheque/Holerite -> "NAO_CABIVEL", motivo: "Documento pessoal/cadastral".
+4. CAPACITAÇÕES < 10H: Palestras rápidas de 1-2h, lives, eventos sem avaliação ou com carga horária inferior a 10h -> "NAO_CABIVEL" (Anexo II, Itens 9 e 11 exigem mín. 10h).
+5. DOCUMENTOS COM BENEFÍCIO JÁ USUFRUÍDO: Diplomas ou cursos já utilizados para Incentivo à Qualificação formal anterior -> "NAO_CABIVEL" (Art. 7º, § 2º).
+
+CRITÉRIOS DE PONTUAÇÃO DOS 6 ANEXOS DA RESOLUÇÃO CS/IFS Nº 394/2026:
+- ANEXO I (Comissões): Item 1 - Colegiados/Conselho Superior (3,0 pts/ano); Item 2 - Coordenação/Presidência de Comissão/PAD (4,5 pts/designação); Item 3 - Membro de Comissão/GT/PAD (3,0 pts/designação).
+- ANEXO II (Projetos/Extensão/Produção Técnica): Item 1 - Coordenação de projeto (7,5 pts); Item 2 - Participação em projeto/PPC (4,5 pts); Item 6 - Manual/Roteiro Técnico homologado (3,0 pts); Item 9/11 - Capacitação >= 10h (1,0 pt).
+- ANEXO III (Premiações): Item 1 - Prêmio Internacional (20 pts); Item 2 - Prêmio Nacional (15 pts); Item 3 - Prêmio Local/Elogio Formal publicado (7,5 pts).
+- ANEXO IV (Responsabilidades): Item 1 - Sistemas Estruturantes SIAFI/SCDP/SIASG (4,5 pts/sistema); Item 3 - Fiscalização de Contrato (4,5 pts/contrato); Item 8 - Responsável por setor sem FG (4,5 pts/ano).
+- ANEXO V (Cargos e Funções CD/FG): Item 1 - CD-02 (9,0 pts/ano); Item 2 - CD-03/04 (7,5 pts/ano); Item 3 - FG-01/02 (4,5 pts/ano); Item 4 - FG-03 a 05 (3,0 pts/ano). Substituição < 6 meses não pontua.
+- ANEXO VI (Produção Científica): Item 1 - Patente (30 pts); Item 2 - Depósito INPI/Software (25 pts); Item 4 - Curso superior formal sem IQ (15 pts); Item 9 - Livro ISBN (20 pts); Item 10 - Artigo periódico (7,5 pts).
+
+PONTUAÇÃO MÍNIMA E CRITÉRIOS MÍNIMOS POR NÍVEL (Art. 7º):
+- RSC-I: 10 pts (mín. 1 critério)
+- RSC-II: 15 pts (mín. 2 critérios)
+- RSC-III: 25 pts (mín. 2 critérios)
+- RSC-IV: 30 pts (mín. 3 critérios, mín. 1 dos Anexos II, IV, V ou VI)
+- RSC-V: 52 pts (mín. 5 critérios, mín. 1 dos Anexos IV, V ou VI)
+- RSC-VI: 75 pts (mín. 7 critérios, obrigatório mín. 1 do Anexo VI)
 
 LISTA DE ARQUIVOS ENVIADOS:
 ${fileDescriptions}
 
-NÍVEL DE RSC PLEITEADO: ${nivel} (Mínimos: RSC-I: 45 pts, RSC-II: 52 pts, RSC-III: 60 pts)
+NÍVEL DE RSC PLEITEADO: ${nivel}
 DADOS DO SERVIDOR: ${JSON.stringify(servidorManual || {})}
 
-Retorne um JSON rigoroso conforme o schema, avaliando CADA um dos ${files.length} arquivos individualmente.`;
+Retorne estritamente um JSON com a avaliação rigorosa e fundamentada de CADA arquivo.`;
 
     const ai = getGeminiClient();
     const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.7-flash', 'gemini-3.1-pro-preview'];
@@ -367,7 +661,7 @@ Retorne um JSON rigoroso conforme o schema, avaliando CADA um dos ${files.length
           contents: prompt,
           config: {
             systemInstruction:
-              'Você é o Avaliador Jurídico-Administrativo do RSC-PCCTAE (Decreto nº 13.048/2026). Retorne estritamente um JSON válido contendo a avaliação precisa de cada documento.',
+              'Você é o Auditor Avaliador Especialista no RSC-PCCTAE do IFS (Resolução CS/IFS nº 394/2026). Julgue com alto rigor técnico-jurídico, descartando comissões duplicadas, prorrogações sem cômputo autônomo, documentos pessoais e capacitações < 10h. Retorne estritamente um JSON válido conforme o schema.',
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
@@ -378,6 +672,9 @@ Retorne um JSON rigoroso conforme o schema, avaliando CADA um dos ${files.length
                 documentosNaoCabiveis: { type: Type.NUMBER },
                 pontuacaoTotalValida: { type: Type.NUMBER },
                 minimoExigido: { type: Type.NUMBER },
+                minimoCriteriosExigidos: { type: Type.NUMBER },
+                criteriosUtilizados: { type: Type.NUMBER },
+                bancoPontosExcedente: { type: Type.NUMBER },
                 aptoParaConcessao: { type: Type.BOOLEAN },
                 resumoPorEixo: {
                   type: Type.OBJECT,
@@ -386,8 +683,10 @@ Retorne um JSON rigoroso conforme o schema, avaliando CADA um dos ${files.length
                     eixoII: { type: Type.NUMBER },
                     eixoIII: { type: Type.NUMBER },
                     eixoIV: { type: Type.NUMBER },
+                    eixoV: { type: Type.NUMBER },
+                    eixoVI: { type: Type.NUMBER },
                   },
-                  required: ['eixoI', 'eixoII', 'eixoIII', 'eixoIV'],
+                  required: ['eixoI', 'eixoII', 'eixoIII', 'eixoIV', 'eixoV', 'eixoVI'],
                 },
                 parecerGeral: { type: Type.STRING },
                 documentosAvaliados: {
@@ -402,10 +701,12 @@ Retorne um JSON rigoroso conforme o schema, avaliando CADA um dos ${files.length
                       eixoSugerido: {
                         type: Type.STRING,
                         enum: [
-                          'I - Formação e Qualificação',
-                          'II - Produção Técnica e Tecnológica',
-                          'III - Gestão e Governança',
-                          'IV - Extensão e Ensino',
+                          'I - Comissões e Grupos de Trabalho',
+                          'II - Projetos, Pesquisa e Extensão',
+                          'III - Premiações e Reconhecimento',
+                          'IV - Responsabilidades e Contratos',
+                          'V - Cargos e Funções de Direção/Chefia',
+                          'VI - Produção Científica e Tecnológica',
                         ],
                       },
                       artigoDecreto: { type: Type.STRING },
@@ -415,6 +716,8 @@ Retorne um JSON rigoroso conforme o schema, avaliando CADA um dos ${files.length
                       pontosMaximosCriterio: { type: Type.NUMBER },
                       justificativa: { type: Type.STRING },
                       orientacaoAoServidor: { type: Type.STRING },
+                      motivoDescarte: { type: Type.STRING },
+                      ehDocumentoDesnecessario: { type: Type.BOOLEAN },
                       incluirNoProcesso: { type: Type.BOOLEAN },
                     },
                     required: [

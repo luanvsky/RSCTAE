@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   Plus,
   Trash2,
@@ -18,16 +18,29 @@ import {
   FileCheck2,
   HelpCircle,
   Sidebar,
+  ShieldAlert,
+  AlertCircle,
+  ArrowRight,
+  BookOpen,
+  Wand2,
+  Zap,
 } from 'lucide-react';
-import { ComprovanteItem, EixoRequisito } from '../types';
+import { ComprovanteItem, EixoRequisito, MemorialDescritivo } from '../types';
 import { copySeiBlockToClipboard } from '../utils/seiClipboard';
 import { resolucaoIFS394 } from '../data/mockDossiers';
 import { PainelSugestoesComprovantes } from './PainelSugestoesComprovantes';
 import { SugestaoDocumental } from '../data/sugestoesComprovantes';
+import {
+  auditarComprovantesAltaPontuacao,
+  avaliarComprovanteContraMemorial,
+  LIMIAR_ALTA_PONTUACAO,
+} from '../utils/memorialCrossCheck';
 
 interface Bloco4Props {
   comprovantes: ComprovanteItem[];
   onUpdateComprovantes: (novosComprovantes: ComprovanteItem[]) => void;
+  memorial?: MemorialDescritivo;
+  onUpdateMemorial?: (novoMemorial: MemorialDescritivo) => void;
 }
 
 const EIXOS_OPTIONS: EixoRequisito[] = [
@@ -42,15 +55,26 @@ const EIXOS_OPTIONS: EixoRequisito[] = [
 export const Bloco4Indexacao: React.FC<Bloco4Props> = ({
   comprovantes,
   onUpdateComprovantes,
+  memorial,
+  onUpdateMemorial,
 }) => {
   const [copied, setCopied] = useState(false);
   const [filterEixo, setFilterEixo] = useState<string>('todos');
+  const [filterAuditoria, setFilterAuditoria] = useState<'todos' | 'criticos' | 'alta_pontuacao'>('todos');
+  const [mostrarCamadaAuditoria, setMostrarCamadaAuditoria] = useState<boolean>(true);
   const [editingItem, setEditingItem] = useState<ComprovanteItem | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [showSidePanel, setShowSidePanel] = useState<boolean>(true);
+  const [justificativaEmEdicao, setJustificativaEmEdicao] = useState<{ id: string; texto: string } | null>(null);
+  const [feedbackAcao, setFeedbackAcao] = useState<string | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
+
+  // Auditoria em tempo real contra o Memorial
+  const auditoria = useMemo(() => {
+    return auditarComprovantesAltaPontuacao(comprovantes, memorial);
+  }, [comprovantes, memorial]);
 
   const [newItem, setNewItem] = useState<ComprovanteItem>({
     id: `comp-${Date.now()}`,
@@ -68,18 +92,24 @@ export const Bloco4Indexacao: React.FC<Bloco4Props> = ({
     statusValidacao: 'Validade Confirmada',
     observacao: '',
     justificativaLegal: 'Resolução CS/IFS 394/2026, Anexo I, Item 3 (3,00 pts por designação).',
+    justificativaMemorial: '',
   });
+
+  const showFeedback = (msg: string) => {
+    setFeedbackAcao(msg);
+    setTimeout(() => setFeedbackAcao(null), 3500);
+  };
 
   const handleCopySei = () => {
     const text = `BLOCO 4: TABELA DE INDEXAÇÃO E ADMISSIBILIDADE DE COMPROVANTES (RESOLUÇÃO CS/IFS Nº 394/2026)
 
-| Req. / Critério Legal | Descrição da Atividade Comprovada | Documentação Anexada ao SEI | Quant. / Unid. | Pontos |
-| :--- | :--- | :--- | :--- | :--- |
+| Req. / Critério Legal | Descrição da Atividade Comprovada | Documentação Anexada ao SEI | Quant. / Unid. | Pontos | Justificativa / Correlação |
+| :--- | :--- | :--- | :--- | :--- | :--- |
 ${comprovantes
-  .map(
-    (item) =>
-      `| ${item.eixo.split(' - ')[0]} (${item.itemCriterio}) | ${item.descricaoAtividade} | ${item.documentoCorrespondente} | ${item.quantidadeInformada || 1} ${item.unidadeMedida || ''} | ${item.pontuacaoAtribuida.toFixed(1).replace('.', ',')} pts |`
-  )
+  .map((item) => {
+    const justif = item.justificativaMemorial ? ` [Justificativa: ${item.justificativaMemorial}]` : '';
+    return `| ${item.eixo.split(' - ')[0]} (${item.itemCriterio}) | ${item.descricaoAtividade} | ${item.documentoCorrespondente} | ${item.quantidadeInformada || 1} ${item.unidadeMedida || ''} | ${Number(item.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts | ${justif || 'Conforme memorial'} |`;
+  })
   .join('\n')}`;
 
     copySeiBlockToClipboard(text).then((ok) => {
@@ -99,6 +129,7 @@ ${comprovantes
     const updated = comprovantes.map((c) => (c.id === editingItem.id ? editingItem : c));
     onUpdateComprovantes(updated);
     setEditingItem(null);
+    showFeedback('Item comprobatório atualizado com sucesso!');
   };
 
   const handleSaveNew = () => {
@@ -122,7 +153,54 @@ ${comprovantes
       statusValidacao: 'Validade Confirmada',
       observacao: '',
       justificativaLegal: 'Resolução CS/IFS 394/2026, Anexo I, Item 3 (3,00 pts por designação).',
+      justificativaMemorial: '',
     });
+    showFeedback('Novo comprovante cadastrado com sucesso!');
+  };
+
+  // Salva a justificativa direta no item
+  const handleSalvarJustificativaDireta = (id: string, texto: string) => {
+    const updated = comprovantes.map((c) =>
+      c.id === id ? { ...c, justificativaMemorial: texto } : c
+    );
+    onUpdateComprovantes(updated);
+    setJustificativaEmEdicao(null);
+    showFeedback('Justificativa obrigatória salva e vinculada ao item!');
+  };
+
+  // Ação rápida: Inserir menção estruturada no Memorial Descritivo
+  const handleInserirNoMemorial = (comprovante: ComprovanteItem) => {
+    if (!memorial || !onUpdateMemorial) {
+      showFeedback('Aviso: Memorial não disponível para edição direta.');
+      return;
+    }
+
+    const avaliacao = avaliarComprovanteContraMemorial(comprovante, memorial);
+    const trecho = avaliacao.trechoSugeridoMemorial;
+
+    const textoAtual = memorial.desenvolvimentoSaberes || '';
+    const separador = textoAtual.trim() ? '\n\n' : '';
+    const novoTextoSaberes = `${textoAtual}${separador}${trecho}`;
+
+    onUpdateMemorial({
+      ...memorial,
+      desenvolvimentoSaberes: novoTextoSaberes,
+    });
+
+    // Também salva uma justificativa concisa no item para reforço probatório
+    const updated = comprovantes.map((c) =>
+      c.id === comprovante.id
+        ? {
+            ...c,
+            justificativaMemorial:
+              c.justificativaMemorial ||
+              `Atividade detalhada e circunstanciada na seção de Desenvolvimento de Saberes do Memorial Descritivo (Resolução CS/IFS nº 394/2026).`,
+          }
+        : c
+    );
+    onUpdateComprovantes(updated);
+
+    showFeedback('⚡ Menção detalhada inserida no Memorial Descritivo com sucesso! Pendência sanada.');
   };
 
   // Handler when user applies a template from the lateral panel
@@ -144,6 +222,10 @@ ${comprovantes
       statusValidacao: 'Validade Confirmada',
       observacao: sugestao.dicaComissao,
       justificativaLegal: `Resolução CS/IFS nº 394/2026, ${sugestao.itemReferencia} (${sugestao.pontosSugeridos.toFixed(1).replace('.', ',')} pts ${sugestao.unidadeSugerida}). ${sugestao.dicaComissao}`,
+      justificativaMemorial:
+        sugestao.pontosSugeridos >= LIMIAR_ALTA_PONTUACAO
+          ? `Atividade de alto impacto normativo nos termos do ${sugestao.itemReferencia}. ${sugestao.dicaComissao}`
+          : '',
     });
 
     setTimeout(() => {
@@ -155,12 +237,30 @@ ${comprovantes
     setExpandedRowId(expandedRowId === id ? null : id);
   };
 
+  // Filtragem combinada (Eixo + Auditoria)
   const filteredItems = comprovantes.filter((c) => {
-    if (filterEixo === 'todos') return true;
-    return c.eixo.startsWith(filterEixo);
+    // Filtro por Eixo
+    if (filterEixo !== 'todos' && !c.eixo.startsWith(filterEixo)) {
+      return false;
+    }
+
+    // Filtro por Auditoria
+    if (filterAuditoria === 'criticos') {
+      const res = avaliarComprovanteContraMemorial(c, memorial);
+      return res.isCriticoSemMemorial;
+    }
+    if (filterAuditoria === 'alta_pontuacao') {
+      const res = avaliarComprovanteContraMemorial(c, memorial);
+      return res.isAltaPontuacao;
+    }
+
+    return true;
   });
 
-  const totalPontosFiltrados = filteredItems.reduce((acc, curr) => acc + (Number(curr.pontuacaoAtribuida) || 0), 0);
+  const totalPontosFiltrados = filteredItems.reduce(
+    (acc, curr) => acc + (Number(curr.pontuacaoAtribuida) || 0),
+    0
+  );
 
   // Eixo to pass to the side panel
   const currentActiveEixo =
@@ -174,6 +274,16 @@ ${comprovantes
 
   return (
     <div className="space-y-4">
+      {/* Toast de Feedback */}
+      {feedbackAcao && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{feedbackAcao}</span>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner with Toggle for Side Panel */}
       <div className="bg-slate-900 text-white rounded-xl p-3.5 px-4 flex flex-wrap items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-2.5">
@@ -196,6 +306,20 @@ ${comprovantes
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Auditoria Toggle Button */}
+          <button
+            onClick={() => setMostrarCamadaAuditoria(!mostrarCamadaAuditoria)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition-colors border ${
+              mostrarCamadaAuditoria
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+            }`}
+            title="Ativar/Desativar camada de destaque visual para itens de alta pontuação sem memorial"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+            <span>{mostrarCamadaAuditoria ? 'Camada de Risco Ativa' : 'Ativar Camada de Risco'}</span>
+          </button>
+
           {/* Side Panel Toggle Button */}
           <button
             onClick={() => setShowSidePanel(!showSidePanel)}
@@ -207,10 +331,49 @@ ${comprovantes
             title="Mostrar/Ocultar painel lateral com sugestões de documentos aceitos pela Comissão"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-            <span>{showSidePanel ? 'Painel de Sugestões Ativo' : 'Ver Documentos Aceitos (CRSC)'}</span>
+            <span>{showSidePanel ? 'Sugestões Ativas' : 'Ver Documentos Aceitos (CRSC)'}</span>
           </button>
         </div>
       </div>
+
+      {/* BANNER DE ALERTA DE AUDITORIA: Itens Críticos de Alta Pontuação */}
+      {mostrarCamadaAuditoria && auditoria.totalCriticos > 0 && (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-3.5 text-rose-900 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-rose-200/80 text-rose-800 rounded-lg shrink-0 mt-0.5 sm:mt-0">
+              <AlertCircle className="w-5 h-5 text-rose-700" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wide bg-rose-600 text-white px-2 py-0.5 rounded">
+                  {auditoria.totalCriticos} Item(ns) Crítico(s) Detectado(s)
+                </span>
+                <span className="text-xs font-bold text-rose-900">
+                  Alta Pontuação (≥ {LIMIAR_ALTA_PONTUACAO.toFixed(1).replace('.', ',')} pts) sem Detalhamento no Memorial
+                </span>
+              </div>
+              <p className="text-xs text-rose-800/90 mt-1 leading-relaxed">
+                A <strong>Resolução CS/IFS nº 394/2026 (Art. 6º, § 2º)</strong> exige que itens de expressivo peso probatório sejam 
+                circunstanciados no Memorial Descritivo ou acompanhados de <strong>Justificativa Obrigatória para Submissão</strong>, evitando glosa pela Comissão Especial.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <button
+              onClick={() => setFilterAuditoria(filterAuditoria === 'criticos' ? 'todos' : 'criticos')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+                filterAuditoria === 'criticos'
+                  ? 'bg-rose-700 text-white border-rose-800'
+                  : 'bg-white text-rose-800 border-rose-300 hover:bg-rose-100'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>{filterAuditoria === 'criticos' ? 'Ver Todos os Itens' : 'Filtrar Apenas Críticos'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Responsive Grid: Table + Side Panel */}
       <div className={`grid grid-cols-1 ${showSidePanel ? 'lg:grid-cols-12' : 'grid-cols-1'} gap-4 items-start`}>
@@ -226,6 +389,12 @@ ${comprovantes
                 <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
                   {comprovantes.length} item(ns)
                 </span>
+                {auditoria.totalCriticos > 0 && mostrarCamadaAuditoria && (
+                  <span className="text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
+                    {auditoria.totalCriticos} crítico(s)
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
                 Validados para o cômputo da pontuação e banco de pontos excedente
@@ -256,11 +425,55 @@ ${comprovantes
             </div>
           </div>
 
-          {/* Filter Tabs */}
+          {/* Quick Auditoria Status Bar */}
+          {mostrarCamadaAuditoria && (
+            <div className="px-4 py-2 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 text-xs border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-300">Camada de Auditoria:</span>
+                <button
+                  onClick={() => setFilterAuditoria('todos')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    filterAuditoria === 'todos' ? 'bg-slate-700 text-white font-bold' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Todos ({comprovantes.length})
+                </button>
+                <button
+                  onClick={() => setFilterAuditoria('criticos')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                    filterAuditoria === 'criticos'
+                      ? 'bg-rose-600 text-white font-bold'
+                      : auditoria.totalCriticos > 0
+                      ? 'bg-rose-950/80 text-rose-300 hover:bg-rose-900 border border-rose-700/50'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <AlertTriangle className="w-3 h-3 text-rose-400" />
+                  <span>Alta Pontuação s/ Memorial ({auditoria.totalCriticos})</span>
+                </button>
+                <button
+                  onClick={() => setFilterAuditoria('alta_pontuacao')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    filterAuditoria === 'alta_pontuacao'
+                      ? 'bg-emerald-600 text-white font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Total Alta Pontuação ({auditoria.totalAltaPontuacao})
+                </button>
+              </div>
+
+              <div className="text-[11px] text-slate-300">
+                Limiar de Rigor: <strong className="text-amber-300">≥ {LIMIAR_ALTA_PONTUACAO.toFixed(1).replace('.', ',')} pts</strong>
+              </div>
+            </div>
+          )}
+
+          {/* Filter Tabs by Eixo */}
           <div className="px-4 py-2 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between gap-2 overflow-x-auto text-xs">
             <div className="flex items-center gap-1">
               {[
-                { key: 'todos', label: `Todos (${comprovantes.length})` },
+                { key: 'todos', label: `Todos os Eixos` },
                 { key: 'I -', label: 'Req. I (Comissões)' },
                 { key: 'II -', label: 'Req. II (Projetos/Ensino)' },
                 { key: 'III -', label: 'Req. III (Prêmios)' },
@@ -388,8 +601,43 @@ ${comprovantes
                 </div>
               </div>
 
+              {/* Justificativa Obrigatória para Submissão se Pontuação for Alta */}
+              {Number(newItem.pontuacaoAtribuida) >= LIMIAR_ALTA_PONTUACAO && (
+                <div className="p-3 bg-amber-50 rounded-lg border border-amber-300 space-y-1.5">
+                  <div className="flex items-center justify-between text-amber-900 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-700" />
+                      <span>Justificativa Obrigatória para Submissão (Item de Alta Pontuação: {Number(newItem.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts)</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewItem({
+                          ...newItem,
+                          justificativaMemorial: `Atividade de alta complexidade e relevância técnica (${newItem.descricaoAtividade || 'encargo funcional'}), comprovada mediante ${newItem.documentoCorrespondente || 'documentação em anexo'}. Contribui decisivamente para os objetivos institucionais e mobilização de competências no âmbito do ${newItem.eixo}.`,
+                        });
+                      }}
+                      className="text-[11px] text-amber-800 hover:text-amber-950 font-bold underline inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-600" />
+                      <span>Preencher Modelo</span>
+                    </button>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={newItem.justificativaMemorial ?? ''}
+                    onChange={(e) => setNewItem({ ...newItem, justificativaMemorial: e.target.value })}
+                    placeholder="Descreva a correlação desta atividade de alto impacto com os objetivos funcionais ou aponte como ela está circunstanciada no Memorial..."
+                    className="w-full text-xs p-2 bg-white border border-amber-300 rounded-lg outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                  <p className="text-[10px] text-amber-800">
+                    A Resolução CS/IFS nº 394/2026 exige que itens de pontuação ≥ 7,5 pts possuam relato circunstanciado no Memorial ou justificativa formal para admissão do processo.
+                  </p>
+                </div>
+              )}
+
               <div>
-                <label className="block text-[11px] text-slate-700 font-semibold mb-1">Justificativa Legal / Observação</label>
+                <label className="block text-[11px] text-slate-700 font-semibold mb-1">Fundamento Legal / Observação</label>
                 <input
                   type="text"
                   value={newItem.justificativaLegal ?? ''}
@@ -406,13 +654,13 @@ ${comprovantes
                 <div className="flex gap-2">
                   <button
                     onClick={() => setIsAddingNew(false)}
-                    className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-slate-700 font-medium"
+                    className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-slate-700 font-medium cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={handleSaveNew}
-                    className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold shadow-xs"
+                    className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold shadow-xs cursor-pointer"
                   >
                     Salvar Comprovante
                   </button>
@@ -471,7 +719,7 @@ ${comprovantes
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-700 font-semibold mb-1">Descrição</label>
+                <label className="block text-[11px] text-slate-700 font-semibold mb-1">Descrição da Atividade</label>
                 <input
                   type="text"
                   value={editingItem.descricaoAtividade ?? ''}
@@ -480,16 +728,61 @@ ${comprovantes
                 />
               </div>
 
+              {/* Justificativa Obrigatória no Modo Edição */}
+              <div className={`p-3 rounded-lg border space-y-1.5 ${
+                Number(editingItem.pontuacaoAtribuida) >= LIMIAR_ALTA_PONTUACAO
+                  ? 'bg-rose-50 border-rose-300'
+                  : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between font-bold">
+                  <span className={`flex items-center gap-1.5 ${
+                    Number(editingItem.pontuacaoAtribuida) >= LIMIAR_ALTA_PONTUACAO ? 'text-rose-900' : 'text-slate-800'
+                  }`}>
+                    {Number(editingItem.pontuacaoAtribuida) >= LIMIAR_ALTA_PONTUACAO ? (
+                      <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-slate-500" />
+                    )}
+                    <span>
+                      {Number(editingItem.pontuacaoAtribuida) >= LIMIAR_ALTA_PONTUACAO
+                        ? `Justificativa Obrigatória para Submissão (Alta Pontuação: ${Number(editingItem.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts)`
+                        : 'Justificativa / Correlação com o Memorial (Opcional)'}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const res = avaliarComprovanteContraMemorial(editingItem, memorial);
+                      setEditingItem({
+                        ...editingItem,
+                        justificativaMemorial: res.justificativaSugerida,
+                      });
+                    }}
+                    className="text-[11px] text-rose-800 hover:text-rose-950 font-bold underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3 text-rose-600" />
+                    <span>Sugerir com IA</span>
+                  </button>
+                </div>
+                <textarea
+                  rows={2}
+                  value={editingItem.justificativaMemorial ?? ''}
+                  onChange={(e) => setEditingItem({ ...editingItem, justificativaMemorial: e.target.value })}
+                  placeholder="Detalhamento circunstanciado da atividade e seu valor para a instituição..."
+                  className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg outline-none"
+                />
+              </div>
+
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   onClick={() => setEditingItem(null)}
-                  className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-slate-700"
+                  className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-slate-700 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold"
+                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold cursor-pointer"
                 >
                   Salvar Alterações
                 </button>
@@ -503,12 +796,12 @@ ${comprovantes
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
                   <th className="py-2.5 px-3 w-10 text-center">#</th>
-                  <th className="py-2.5 px-3 w-40">Requisito</th>
-                  <th className="py-2.5 px-3">Atividade / Portarias</th>
-                  <th className="py-2.5 px-3 w-40">Doc. Anexo / Fls. SEI</th>
+                  <th className="py-2.5 px-3 w-36">Requisito</th>
+                  <th className="py-2.5 px-3">Atividade &amp; Correlação Memorial</th>
+                  <th className="py-2.5 px-3 w-36">Doc. Anexo / Fls. SEI</th>
                   <th className="py-2.5 px-3 w-20 text-right">Pontos</th>
-                  <th className="py-2.5 px-3 w-24 text-center">Status</th>
-                  <th className="py-2.5 px-3 w-16 text-center">Ações</th>
+                  <th className="py-2.5 px-3 w-32 text-center">Status Auditoria</th>
+                  <th className="py-2.5 px-3 w-20 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -517,19 +810,34 @@ ${comprovantes
                     <td colSpan={7} className="text-center py-10 text-slate-400">
                       <div className="max-w-xs mx-auto space-y-2">
                         <FileText className="w-8 h-8 mx-auto text-slate-300" />
-                        <p className="font-semibold text-slate-600">Nenhum comprovante cadastrado neste filtro.</p>
+                        <p className="font-semibold text-slate-600">Nenhum comprovante encontrado para os filtros ativos.</p>
                         <p className="text-[11px] text-slate-400">
-                          Utilize o botão &quot;Novo Comprovante&quot; ou clique em um dos modelos sugeridos no painel lateral.
+                          {filterAuditoria === 'criticos'
+                            ? 'Parabéns! Não existem itens de alta pontuação sem detalhamento no Memorial.'
+                            : 'Utilize o botão "Novo Comprovante" ou selecione um modelo do painel lateral.'}
                         </p>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   filteredItems.map((item, index) => {
+                    const avaliacao = avaliarComprovanteContraMemorial(item, memorial);
                     const isExpanded = expandedRowId === item.id;
+                    const isCritico = avaliacao.isCriticoSemMemorial && mostrarCamadaAuditoria;
+                    const isAltaPontuacaoConforme = avaliacao.isAltaPontuacao && avaliacao.isDetalhadoNoMemorial;
+
                     return (
                       <React.Fragment key={item.id}>
-                        <tr className="hover:bg-slate-50/70 transition-colors group">
+                        {/* Linha Principal com Destaque em Vermelho se Crítico */}
+                        <tr
+                          className={`transition-colors group ${
+                            isCritico
+                              ? 'bg-rose-50/75 border-l-4 border-l-rose-600 hover:bg-rose-100/70 text-rose-950'
+                              : isAltaPontuacaoConforme
+                              ? 'bg-emerald-50/20 hover:bg-slate-50/80'
+                              : 'hover:bg-slate-50/70'
+                          }`}
+                        >
                           <td className="py-2.5 px-3 text-center font-mono text-slate-400">
                             {index + 1}
                           </td>
@@ -544,55 +852,215 @@ ${comprovantes
                           </td>
 
                           <td className="py-2.5 px-3">
-                            <div className="font-medium text-slate-900 line-clamp-2">
+                            <div className="font-medium text-slate-900">
                               {item.descricaoAtividade}
                             </div>
-                            {item.unidadeMedida && (
-                              <div className="text-[10px] text-slate-500 mt-0.5">
-                                Qtd: <strong>{item.quantidadeInformada || 1}</strong> &bull; {item.unidadeMedida}
+
+                            {/* Tags de Destaque / Alerta */}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              {/* Alerta de Alta Pontuação sem Memorial */}
+                              {isCritico && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-rose-600 text-white shadow-2xs animate-pulse">
+                                  <AlertCircle className="w-3 h-3" />
+                                  <span>ALTA PONTUAÇÃO ({Number(item.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts) • SEM MEMORIAL</span>
+                                </span>
+                              )}
+
+                              {/* Selo Verde de Alta Pontuação Conforme */}
+                              {isAltaPontuacaoConforme && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Alta Pontuação Conforme ({Number(item.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts)</span>
+                                </span>
+                              )}
+
+                              {item.unidadeMedida && (
+                                <span className="text-[10px] text-slate-500">
+                                  Qtd: <strong>{item.quantidadeInformada || 1}</strong> &bull; {item.unidadeMedida}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Exibição da Justificativa se preenchida */}
+                            {item.justificativaMemorial && (
+                              <div className="mt-1 text-[11px] text-slate-600 bg-white/80 p-1.5 rounded border border-slate-200/80 italic line-clamp-2">
+                                <span className="font-semibold text-slate-700 not-italic">Justificativa de Submissão:</span> {item.justificativaMemorial}
                               </div>
                             )}
                           </td>
 
                           <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
-                            <div className="line-clamp-1" title={item.documentoCorrespondente}>
+                            <div className="line-clamp-2" title={item.documentoCorrespondente}>
                               {item.documentoCorrespondente}
                             </div>
                           </td>
 
                           <td className="py-2.5 px-3 text-right">
-                            <span className="font-bold text-emerald-700 text-sm">
+                            <span
+                              className={`font-black text-sm ${
+                                isCritico
+                                  ? 'text-rose-700'
+                                  : Number(item.pontuacaoAtribuida) >= LIMIAR_ALTA_PONTUACAO
+                                  ? 'text-emerald-700'
+                                  : 'text-slate-800'
+                              }`}
+                            >
                               {Number(item.pontuacaoAtribuida).toFixed(1).replace('.', ',')}
                             </span>
                             <span className="text-[10px] text-slate-400 block">pts</span>
                           </td>
 
                           <td className="py-2.5 px-3 text-center">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-full whitespace-nowrap">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              <span>Validado</span>
-                            </span>
+                            {isCritico ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-900 bg-rose-200/90 border border-rose-300 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                <AlertTriangle className="w-3 h-3 text-rose-700 shrink-0" />
+                                <span>Exige Justificativa</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span>Validado</span>
+                              </span>
+                            )}
                           </td>
 
                           <td className="py-2.5 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100">
+                            <div className="flex items-center justify-center gap-1">
+                              {/* Botão de Expansão/Ação de Justificativa */}
+                              <button
+                                onClick={() => toggleRowExpand(item.id)}
+                                title={isExpanded ? 'Recolher detalhes' : 'Ver/Editar Justificativa Obrigatória'}
+                                className={`p-1 rounded transition-colors cursor-pointer ${
+                                  isCritico
+                                    ? 'bg-rose-200 text-rose-800 hover:bg-rose-300 font-bold'
+                                    : 'hover:bg-slate-200 text-slate-500'
+                                }`}
+                              >
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+
                               <button
                                 onClick={() => setEditingItem(item)}
-                                title="Editar"
-                                className="p-1 hover:text-slate-900 text-slate-400 transition-colors"
+                                title="Editar Item Completo"
+                                className="p-1 hover:text-slate-900 text-slate-400 transition-colors cursor-pointer"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
+
                               <button
                                 onClick={() => handleDeleteItem(item.id)}
-                                title="Excluir"
-                                className="p-1 hover:text-rose-600 text-slate-400 transition-colors"
+                                title="Excluir Comprovante"
+                                className="p-1 hover:text-rose-600 text-slate-400 transition-colors cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>
                         </tr>
+
+                        {/* Linha Expandida: Ação de Resolução Imediata e Justificativa Obrigatória */}
+                        {isExpanded && (
+                          <tr className={isCritico ? 'bg-rose-100/50' : 'bg-slate-50/60'}>
+                            <td colSpan={7} className="p-3.5 px-4">
+                              <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-3 shadow-xs">
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <FileCheck2 className="w-4 h-4 text-slate-700" />
+                                    <span className="font-bold text-xs text-slate-900">
+                                      Detalhamento &amp; Correlação com o Memorial Descritivo
+                                    </span>
+                                    {isCritico && (
+                                      <span className="text-[10px] font-black bg-rose-600 text-white px-2 py-0.5 rounded uppercase">
+                                        Justificativa Obrigatória Pendente
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    {/* Botão de Inserção com 1 Clique no Memorial */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleInserirNoMemorial(item)}
+                                      className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg inline-flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                      title="Insere um parágrafo estruturado com esta atividade diretamente no Memorial Descritivo"
+                                    >
+                                      <Zap className="w-3.5 h-3.5 text-amber-300" />
+                                      <span>⚡ Inserir Menção no Memorial</span>
+                                    </button>
+
+                                    {/* Botão de Gerar Justificativa com IA */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setJustificativaEmEdicao({
+                                          id: item.id,
+                                          texto: avaliacao.justificativaSugerida,
+                                        });
+                                      }}
+                                      className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                    >
+                                      <Wand2 className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>Sugerir Justificativa</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {isCritico && (
+                                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 leading-relaxed">
+                                    <strong>⚠️ Exigência Normativa para Submissão:</strong> Por se tratar de um item com pontuação elevada (<strong>{Number(item.pontuacaoAtribuida).toFixed(1).replace('.', ',')} pts</strong>), 
+                                    a comissão avaliadora do IFS exige que esta atividade seja detalhada nas seções do Memorial Descritivo ou acompanhada de justificativa formal abaixo.
+                                  </div>
+                                )}
+
+                                <div>
+                                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                    Texto da Justificativa de Submissão / Relevância da Atividade:
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={
+                                      justificativaEmEdicao?.id === item.id
+                                        ? justificativaEmEdicao.texto
+                                        : item.justificativaMemorial || ''
+                                    }
+                                    onChange={(e) => {
+                                      setJustificativaEmEdicao({
+                                        id: item.id,
+                                        texto: e.target.value,
+                                      });
+                                    }}
+                                    placeholder="Escreva a justificativa de correlação circunstanciada desta atividade com o Memorial Descritivo..."
+                                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-slate-400 leading-relaxed"
+                                  />
+                                </div>
+
+                                <div className="flex items-center justify-between pt-1">
+                                  <span className="text-[11px] text-slate-500">
+                                    {item.justificativaLegal && (
+                                      <span>Base Legal: <em>{item.justificativaLegal}</em></span>
+                                    )}
+                                  </span>
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const texto =
+                                          justificativaEmEdicao?.id === item.id
+                                            ? justificativaEmEdicao.texto
+                                            : item.justificativaMemorial || '';
+                                        handleSalvarJustificativaDireta(item.id, texto);
+                                      }}
+                                      className="px-3.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shadow-xs"
+                                    >
+                                      Salvar Justificativa
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
                       </React.Fragment>
                     );
                   })

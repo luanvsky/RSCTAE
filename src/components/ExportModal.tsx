@@ -16,6 +16,7 @@ import { ProcessoRSC } from '../types';
 import { exportProcessoToPdf, openProcessoPdfInNewTab } from '../utils/pdfExport';
 import { exportProcessoToWord } from '../utils/wordExport';
 import { generateSeiFormattedText, copySeiBlockToClipboard } from '../utils/seiClipboard';
+import { auditarComprovantesAltaPontuacao } from '../utils/memorialCrossCheck';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -37,6 +38,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setFeedbackMessage({ type, text });
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
+
+  const auditoria = auditarComprovantesAltaPontuacao(
+    processo.indexacaoComprovantes || [],
+    processo.memorial
+  );
 
   const handleDownloadPdf = () => {
     const result = exportProcessoToPdf(processo);
@@ -138,6 +144,21 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Export Options Grid */}
         <div className="p-6 space-y-4">
+          {/* Warning banner if high score items lack memorial description/justification */}
+          {auditoria.totalCriticos > 0 && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">
+                  Aviso Preventivo: {auditoria.totalCriticos} item(ns) de alta pontuação sem justificativa no Memorial
+                </span>
+                <span className="text-[11px] text-rose-800/90 mt-0.5 block leading-relaxed">
+                  Para evitar diligências ou glosa pela Comissão do RSC/IFS, recomenda-se preencher a justificativa obrigatória ou detalhar as atividades no Bloco 3 antes da autuação definitiva no SEI.
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Direct PDF Download (ABNT) */}
             <div

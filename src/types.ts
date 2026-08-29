@@ -44,8 +44,13 @@ export interface ComprovanteItem {
   statusValidacao: 'Validade Confirmada' | 'Pendente de Conferência' | 'Em Conformidade' | 'Indeferido / Não Cabível' | 'Cabível com Ressalva';
   veredito?: 'CABIVEL' | 'NAO_CABIVEL' | 'CABIVEL_PARCIAL';
   justificativaLegal?: string;
+  justificativaMemorial?: string; // Justificativa obrigatória para submissão de itens de alta pontuação
+  detalhadoNoMemorial?: boolean;
+  pontuacaoAlta?: boolean;
   artigoDecreto?: string;
   observacao?: string;
+  motivoDescarte?: string;
+  ehDocumentoDesnecessario?: boolean;
   incluidoNoDossie?: boolean;
 }
 
@@ -62,6 +67,8 @@ export interface DocumentoAvaliado {
   pontosMaximosCriterio: number;
   justificativa: string;
   orientacaoAoServidor?: string;
+  motivoDescarte?: string;
+  ehDocumentoDesnecessario?: boolean;
   incluirNoProcesso: boolean;
 }
 
