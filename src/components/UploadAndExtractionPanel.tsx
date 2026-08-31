@@ -13,7 +13,15 @@ import {
   Plus,
   Layers,
   HelpCircle,
-  ChevronRight
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  BookOpen,
+  CheckCircle,
+  FileCheck,
+  ShieldCheck,
+  Info,
+  DownloadCloud
 } from 'lucide-react';
 import { ProcessoRSC, DocumentoAvaliado, ComprovanteItem } from '../types';
 import { AvaliacaoLoteModal } from './AvaliacaoLoteModal';
@@ -541,6 +549,10 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
         else if (eixo.startsWith('VI -')) e6 += pontos;
       }
 
+      const detalhamentoLeitura = veredito !== 'NAO_CABIVEL'
+        ? `Leitura do Anexo "${file.name}": Documento analisado e qualificado como ${tipo}. Identificada a comprovação formal de: ${descricao} (Carga horária/Período: ${cargaHoraria}). Enquadrado no ${eixo} (${artigo}), totalizando ${pontos.toFixed(1).replace('.', ',')} pontos. ${justificativa}`
+        : `Leitura do Anexo "${file.name}": Documento lido como ${tipo}. Parecer de não inclusão no cômputo: ${motivoDescarte || justificativa}.`;
+
       avaliados.push({
         id,
         nomeArquivo: file.name,
@@ -549,6 +561,7 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
         eixoSugerido: eixo,
         artigoDecreto: artigo,
         descricaoIdentificada: descricao,
+        detalhamentoLeitura,
         cargaHorariaOuPeriodo: cargaHoraria,
         pontosCalculados: pontos,
         pontosMaximosCriterio: pontosMax,
@@ -698,13 +711,17 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
     }
   };
 
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [showGuiaLeitura, setShowGuiaLeitura] = useState(true);
+
   const handleApplyApprovedDocuments = (documentosAprovados: DocumentoAvaliado[]) => {
     // Transform approved items to ComprovanteItem format for Bloco 4
     const novosComprovantes: ComprovanteItem[] = documentosAprovados.map((doc, idx) => ({
       id: `comp-audited-${Date.now()}-${idx + 1}`,
-      itemCriterio: `Decreto nº 13.048/2026 - ${doc.artigoDecreto}`,
+      itemCriterio: `Resolução CS/IFS nº 394/2026 - ${doc.artigoDecreto}`,
       eixo: doc.eixoSugerido,
       descricaoAtividade: doc.descricaoIdentificada,
+      detalhamentoLeitura: doc.detalhamentoLeitura || `Leitura do Anexo: Documento analisado como ${doc.tipoDocumento} (${doc.artigoDecreto}). Pontos apurados: ${doc.pontosCalculados.toFixed(1).replace('.', ',')}. ${doc.justificativa}`,
       documentoCorrespondente: `${doc.nomeArquivo} (Fls. ${String(idx * 4 + 1).padStart(2, '0')}-${String(idx * 4 + 4).padStart(2, '0')})`,
       periodoHoras: doc.cargaHorariaOuPeriodo,
       pontuacaoAtribuida: doc.pontosCalculados,
@@ -712,30 +729,33 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
       statusValidacao: doc.veredito === 'CABIVEL_PARCIAL' ? 'Cabível com Ressalva' : 'Validade Confirmada',
       veredito: doc.veredito,
       justificativaLegal: doc.justificativa,
+      justificativaMemorial: doc.pontosCalculados >= 7.5 ? doc.justificativa : undefined,
+      pontuacaoAlta: doc.pontosCalculados >= 7.5,
+      detalhadoNoMemorial: true,
       artigoDecreto: doc.artigoDecreto,
       observacao: doc.orientacaoAoServidor,
       incluidoNoDossie: true,
     }));
 
     // Auto-update memorial descritivo highlights based on approved items
-    const qualif = documentosAprovados.filter((d) => d.eixoSugerido.startsWith('I -')).map((d) => d.descricaoIdentificada).join('; ');
-    const tecnic = documentosAprovados.filter((d) => d.eixoSugerido.startsWith('II -')).map((d) => d.descricaoIdentificada).join('; ');
-    const gestao = documentosAprovados.filter((d) => d.eixoSugerido.startsWith('III -')).map((d) => d.descricaoIdentificada).join('; ');
-    const ensino = documentosAprovados.filter((d) => d.eixoSugerido.startsWith('IV -')).map((d) => d.descricaoIdentificada).join('; ');
+    const qualif = documentosAprovados.filter((d) => d.eixoSugerido.startsWith('I -') || d.eixoSugerido.startsWith('II -')).map((d) => d.descricaoIdentificada).join('; ');
+    const gestao = documentosAprovados.filter((d) => d.eixoSugerido.startsWith('V -') || d.eixoSugerido.startsWith('IV -')).map((d) => d.descricaoIdentificada).join('; ');
+    const producao = documentosAprovados.filter((d) => d.eixoSugerido.startsWith('VI -') || d.eixoSugerido.startsWith('III -')).map((d) => d.descricaoIdentificada).join('; ');
+
+    const totalPontos = novosComprovantes.reduce((acc, c) => acc + (c.pontuacaoAtribuida || 0), 0);
 
     const novoMemorial = {
       apresentacaoTrajetoria: currentProcesso.memorial.apresentacaoTrajetoria ||
-        `Servidor público federal ocupante do cargo de ${currentProcesso.servidor.cargo || 'Assistente em Administração'}, lotado na ${currentProcesso.servidor.lotacao || 'Diretoria de Gestão de Pessoas'}, atuando com dedicação e compromisso no desenvolvimento das rotinas administrativas e pedagógicas institucionais.`,
+        `Servidor público federal ocupante do cargo de ${currentProcesso.servidor.cargo || 'Assistente em Administração'}, lotado no ${currentProcesso.servidor.campus || 'IFS'}, desempenhando atividades institucionais com elevado grau de responsabilidade, rigor técnico e zelo ao serviço público.`,
       desenvolvimentoSaberes:
-        `O desenvolvimento de saberes e competências ao longo da carreira encontra-se estruturado em estrita observância aos 4 eixos do Decreto nº 13.048/2026:\n` +
-        `• Eixo I (Qualificação): ${qualif || 'Participação contínua em ações de capacitação técnica em escolas de governo e pós-graduação'}.\n` +
-        `• Eixo II (Produção Técnica): ${tecnic || 'Elaboração e revisão de manuais de procedimentos operacionais e ferramentas de trabalho'}.\n` +
-        `• Eixo III (Gestão e Governança): ${gestao || 'Atuação em funções de chefia e participação em comissões institucionais e colegiados'}.\n` +
-        `• Eixo IV (Extensão e Ensino): ${ensino || 'Atuação como instrutor em treinamentos internos e projetos de difusão de conhecimento'}.`,
+        `O desenvolvimento e aprimoramento de competências ao longo da trajetória profissional estruturam-se em consonância com a Resolução CS/IFS nº 394/2026 e o Decreto nº 13.048/2026:\n\n` +
+        `• Comissões, Capacitações e Projetos Institucionais: ${qualif || 'Participação ativa em grupos de trabalho normativos, comissões de processo e capacitações continuadas'}.\n` +
+        `• Gestão, Governança e Responsabilidades Contratuais: ${gestao || 'Atuação em funções de coordenação/chefia, auditoria de sistemas estruturantes federais e fiscalização de contratos'}.\n` +
+        `• Produção Técnica, Premiações e Difusão do Saber: ${producao || 'Elaboração de manuais técnicos institucionais, relatórios de gestão e depósitos tecnológicos'}.`,
       impactoInstitucional:
-        `As competências consolidadas resultaram em expressivos ganhos de celeridade, conformidade legal e padronização para o ${currentProcesso.servidor.campus || 'Campus Institucional'}, garantindo segurança jurídica aos processos e eficiência no atendimento à comunidade acadêmica.`,
+        `A consolidação dos saberes e práticas funcionais proporcionou relevante contribuição ao Instituto Federal de Sergipe, garantindo segurança jurídica aos processos administrativos, celeridade processual e contínua modernização da gestão pública.`,
       conclusao:
-        `Diante da documentação comprobatória anexada e avaliada, totalizando pontuação superior ao piso regulamentar de ${currentProcesso.servidor.nivelRscSolicitado || 'RSC-II'}, requer-se o deferimento e a concessão do Reconhecimento de Saberes e Competências.`,
+        `Com base na documentação comprobatória lida, auditada e indexada no presente dossiê, totalizando ${totalPontos.toFixed(1).replace('.', ',')} pontos válidos (superando o piso regulamentar de ${currentProcesso.servidor.nivelRscSolicitado || 'RSC-II'}), submete-se o presente processo à Comissão Avaliadora para homologação e concessão do RSC.`,
     };
 
     onProcessoUpdate({
@@ -745,6 +765,89 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
     });
 
     setIsOpen(false);
+    setSuccessToast(`Sucesso! ${novosComprovantes.length} anexo(s) auditado(s) e inserido(s) no processo (${totalPontos.toFixed(1).replace('.', ',')} pontos).`);
+    setTimeout(() => setSuccessToast(null), 5000);
+  };
+
+  // Direct extraction and insertion into process
+  const handleExtractAndInsertDirectly = async () => {
+    if (stagedFiles.length === 0 && !additionalText.trim()) {
+      setError('Selecione ou anexe pelo menos um arquivo PDF para extração.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+    setStatusMessage('Extraindo e interpretando todos os anexos conforme Resolução CS/IFS nº 394/2026...');
+
+    try {
+      const preparedFiles = stagedFiles.map((sf) => ({
+        name: sf.name,
+        size: sf.size,
+        type: sf.type,
+        textContent: sf.textContent,
+      }));
+
+      let evalData: any = null;
+
+      try {
+        const response = await fetch('/api/evaluate-batch-pdfs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: preparedFiles,
+            nivelDesejado: currentProcesso.servidor.nivelRscSolicitado || 'RSC-II',
+            servidorManual: currentProcesso.servidor,
+            additionalContext: additionalText,
+          }),
+        });
+
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          if (data.success && data.evaluation) {
+            evalData = data.evaluation;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('Fallback para motor normativo local:', fetchErr);
+      }
+
+      if (!evalData) {
+        evalData = runLocalBatchEvaluation(
+          preparedFiles,
+          currentProcesso.servidor.nivelRscSolicitado || 'RSC-II',
+          currentProcesso.servidor
+        );
+      }
+
+      const aprovados = (evalData.documentosAvaliados || []).filter(
+        (d: DocumentoAvaliado) => d.veredito !== 'NAO_CABIVEL'
+      );
+
+      if (aprovados.length === 0) {
+        setError('Nenhum anexo pontuável identificado no lote. Verifique se os documentos anexados atendem aos critérios normativos.');
+        setIsProcessing(false);
+        setStatusMessage('');
+        return;
+      }
+
+      handleApplyApprovedDocuments(aprovados);
+    } catch (err: any) {
+      console.error('Erro na extração direta:', err);
+      const localEval = runLocalBatchEvaluation(
+        stagedFiles.map((sf) => ({ name: sf.name, size: sf.size, type: sf.type, textContent: sf.textContent })),
+        currentProcesso.servidor.nivelRscSolicitado || 'RSC-II',
+        currentProcesso.servidor
+      );
+      const aprovados = (localEval.documentosAvaliados || []).filter(
+        (d: DocumentoAvaliado) => d.veredito !== 'NAO_CABIVEL'
+      );
+      handleApplyApprovedDocuments(aprovados);
+    } finally {
+      setIsProcessing(false);
+      setStatusMessage('');
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -758,6 +861,23 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
 
   return (
     <>
+      {/* Success Toast */}
+      {successToast && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-800 text-white px-4 py-3 rounded-xl shadow-xl border border-emerald-600 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <CheckCircle className="w-5 h-5 text-emerald-300 shrink-0" />
+          <div>
+            <div className="text-xs font-bold">Anexos Inseridos no Processo!</div>
+            <div className="text-[11px] text-emerald-100">{successToast}</div>
+          </div>
+          <button
+            onClick={() => setSuccessToast(null)}
+            className="text-emerald-300 hover:text-white ml-2 p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Compact Banner when closed */}
       {!isOpen ? (
         <div className="mb-4 bg-gradient-to-r from-emerald-50 via-slate-50 to-teal-50 border border-emerald-200/80 rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
@@ -768,14 +888,14 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-900">
-                  Envio Unificado de Todos os PDFs &bull; Avaliação de Admissibilidade
+                  Extração Inteligente de Anexos &bull; Resolução CS/IFS nº 394/2026
                 </span>
                 <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full">
-                  Decreto nº 13.048/2026
+                  Leitor de Comprovantes
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 mt-0.5">
-                Envie todos os seus certificados, portarias e documentos em um único envio. O sistema lê e avalia se é cabível ou não pontuar cada item.
+                Carregue seus PDFs para ler, extrair e inserir comprovantes auditados diretamente no processo com descrição analítica de cada anexo.
               </p>
             </div>
           </div>
@@ -785,7 +905,8 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
               onClick={() => setIsOpen(true)}
               className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
             >
-              <span>Carregar & Avaliar PDFs</span>
+              <FileText className="w-3.5 h-3.5" />
+              <span>Carregar & Extrair Anexos</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -801,13 +922,13 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
               </div>
               <div>
                 <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <span>Envio Unificado e Auditoria de Admissibilidade de Documentos</span>
+                  <span>Extração e Leitura Automatizada de Anexos</span>
                   <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                    PCCTAE / Decreto 13.048/2026
+                    Resolução CS/IFS nº 394/2026
                   </span>
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Arraste ou selecione todos os seus PDFs de uma só vez (diplomas, certificados ENAP/TCU, portarias de chefia/comissão, manuais e declarações).
+                  Leitura documental, classificação nos 6 eixos regulamentares e inserção direta no processo com descrição circunstanciada.
                 </p>
               </div>
             </div>
@@ -818,6 +939,77 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+
+          {/* Seção Explicativa: Guia e Descrição da Leitura dos Anexos */}
+          <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowGuiaLeitura(!showGuiaLeitura)}
+              className="w-full px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 flex items-center justify-between text-left transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-emerald-700" />
+                <span className="text-xs font-bold text-slate-900">
+                  Descrição e Metodologia da Leitura dos Anexos
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-medium px-1.5 py-0.5 rounded">
+                  Como os anexos são lidos e auditados
+                </span>
+              </div>
+              {showGuiaLeitura ? (
+                <ChevronUp className="w-4 h-4 text-slate-500" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-500" />
+              )}
+            </button>
+
+            {showGuiaLeitura && (
+              <div className="p-3.5 space-y-3 text-xs text-slate-700 bg-white">
+                <p className="text-[11.5px] leading-relaxed text-slate-600">
+                  Ao solicitar a extração, o sistema realiza a leitura automatizada de cada anexo com base na <strong>Resolução CS/IFS nº 394/2026</strong> e no <strong>Decreto nº 13.048/2026</strong>:
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  <div className="p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <div className="font-bold text-emerald-900 flex items-center gap-1.5 text-[11px]">
+                      <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>1. Identificação do Documento</span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-600 leading-normal">
+                      Extrai o tipo de ato (Portaria, Certificado, Contrato, Ata, Declaração), número oficial, autoridade emitente e período/carga horária.
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-100 space-y-1">
+                    <div className="font-bold text-blue-900 flex items-center gap-1.5 text-[11px]">
+                      <Scale className="w-3.5 h-3.5 text-blue-700" />
+                      <span>2. Enquadramento e Pontuação</span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-600 leading-normal">
+                      Enquadra o anexo em um dos 6 eixos regulamentares, calcula a pontuação unitária e gera a fundamentação legal para a Comissão Avaliadora.
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-100 space-y-1">
+                    <div className="font-bold text-amber-900 flex items-center gap-1.5 text-[11px]">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+                      <span>3. Triagem Protetiva</span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-600 leading-normal">
+                      Aplica a vedação ao duplo cômputo (Art. 7º, § 2º) e descarta documentos pessoais e rotinas ordinárias para evitar glosas processuais.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-slate-600 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Inserção no Processo:</strong> Ao clicar em <em>"Extrair e Inserir Anexos no Processo"</em>, todos os itens pontuáveis são incluídos na tabela de comprovantes (Bloco 4) com a respectiva <em>Descrição da Leitura do Anexo</em> e o Memorial Descritivo é atualizado automaticamente.
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Drag and Drop Zone */}
@@ -989,17 +1181,29 @@ export const UploadAndExtractionPanel: React.FC<UploadAndExtractionPanelProps> =
                 type="button"
                 onClick={handleEvaluateBatch}
                 disabled={isProcessing || stagedFiles.length === 0}
+                className="text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 px-3.5 py-2 rounded-lg inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Abre o modal de auditoria para revisar cada anexo e suas justificativas antes de inserir"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-600" />
+                <span>Revisar Leitura em Lote</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExtractAndInsertDirectly}
+                disabled={isProcessing || stagedFiles.length === 0}
                 className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 px-4 py-2 rounded-lg inline-flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+                title="Executa a leitura dos anexos e insere diretamente todos os comprovantes pontuáveis no processo"
               >
                 {isProcessing ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Avaliando Admissibilidade...</span>
+                    <span>Extraindo & Inserindo...</span>
                   </>
                 ) : (
                   <>
-                    <Zap className="w-4 h-4" />
-                    <span>Ler e Avaliar Todos os PDFs ({stagedFiles.length})</span>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Extrair e Inserir Anexos no Processo ({stagedFiles.length})</span>
                   </>
                 )}
               </button>

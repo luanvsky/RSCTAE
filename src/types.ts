@@ -35,6 +35,7 @@ export interface ComprovanteItem {
   itemNumero?: number;
   descricaoAtividade: string;
   documentoCorrespondente: string;
+  detalhamentoLeitura?: string; // Descrição analítica e circunstanciada da leitura do anexo
   unidadeMedida?: string; // Ex: Por designação, Por ano, Por projeto, Por produto
   pontosPorUnidade?: number;
   quantidadeInformada?: number;
@@ -62,6 +63,7 @@ export interface DocumentoAvaliado {
   eixoSugerido: EixoRequisito;
   artigoDecreto: string;
   descricaoIdentificada: string;
+  detalhamentoLeitura?: string; // Descrição circunstanciada da leitura do anexo
   cargaHorariaOuPeriodo: string;
   pontosCalculados: number;
   pontosMaximosCriterio: number;

@@ -881,6 +881,16 @@ ${comprovantes
                               )}
                             </div>
 
+                            {/* Descrição da Leitura do Anexo se disponível */}
+                            {item.detalhamentoLeitura && (
+                              <div className="mt-1 text-[10.5px] text-emerald-900 bg-emerald-50/80 p-1.5 rounded border border-emerald-200/80 flex items-start gap-1.5 line-clamp-2" title={item.detalhamentoLeitura}>
+                                <BookOpen className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="font-bold text-emerald-950">Leitura do Anexo:</span> {item.detalhamentoLeitura}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Exibição da Justificativa se preenchida */}
                             {item.justificativaMemorial && (
                               <div className="mt-1 text-[11px] text-slate-600 bg-white/80 p-1.5 rounded border border-slate-200/80 italic line-clamp-2">
@@ -1004,6 +1014,19 @@ ${comprovantes
                                     </button>
                                   </div>
                                 </div>
+
+                                {/* Descrição da Leitura do Anexo se houver */}
+                                {item.detalhamentoLeitura && (
+                                  <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg text-xs text-emerald-950 space-y-1">
+                                    <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                                      <BookOpen className="w-4 h-4 text-emerald-700" />
+                                      <span>Descrição da Leitura do Anexo (Extração Automatizada):</span>
+                                    </div>
+                                    <p className="text-slate-700 leading-relaxed pl-5">
+                                      {item.detalhamentoLeitura}
+                                    </p>
+                                  </div>
+                                )}
 
                                 {isCritico && (
                                   <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 leading-relaxed">

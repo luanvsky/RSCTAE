@@ -471,6 +471,10 @@ function evaluateFilesWithRules(
       orientacao = 'Recomenda-se juntar cópia autenticada ou número de processo SEI com código de verificação para evitar glosa pela comissão.';
     }
 
+    const detalhamentoLeitura = veredito !== 'NAO_CABIVEL'
+      ? `Leitura do Anexo "${file.name}": Documento analisado e qualificado como ${tipo}. Identificada a comprovação formal de: ${descricao} (Carga horária/Período: ${cargaHoraria}). Enquadrado no ${eixo} (${artigo}), totalizando ${pontos.toFixed(1).replace('.', ',')} pontos. ${justificativa}`
+      : `Leitura do Anexo "${file.name}": Documento lido como ${tipo}. Parecer de não inclusão no cômputo: ${motivoDescarte || justificativa}.`;
+
     const docAvaliado = {
       id,
       nomeArquivo: file.name,
@@ -479,6 +483,7 @@ function evaluateFilesWithRules(
       eixoSugerido: eixo,
       artigoDecreto: artigo,
       descricaoIdentificada: descricao,
+      detalhamentoLeitura,
       cargaHorariaOuPeriodo: cargaHoraria,
       unidadeMedida: unidade,
       quantidadeInformada: qtd,
@@ -506,6 +511,7 @@ function evaluateFilesWithRules(
         itemCriterio: `Resolução CS/IFS nº 394/2026 - ${artigo}`,
         eixo,
         descricaoAtividade: descricao,
+        detalhamentoLeitura,
         documentoCorrespondente: `${file.name} (Fls. ${String(index * 4 + 1).padStart(2, '0')}-${String(index * 4 + 4).padStart(2, '0')})`,
         unidadeMedida: unidade,
         pontosPorUnidade: pontosPorUnid,

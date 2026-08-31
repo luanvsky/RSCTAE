@@ -299,9 +299,22 @@ export const AvaliacaoLoteModal: React.FC<AvaliacaoLoteModalProps> = ({
                       </div>
 
                       {/* Subtitle & Axis */}
-                      <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
+                      <p className="text-xs text-slate-700 leading-relaxed font-medium">
                         {doc.descricaoIdentificada}
                       </p>
+
+                      {/* Descrição da Leitura do Anexo */}
+                      {doc.detalhamentoLeitura && (
+                        <div className="mt-2 p-2 rounded-lg bg-emerald-50/70 border border-emerald-200/70 text-[11px] text-emerald-900 leading-relaxed">
+                          <div className="flex items-center gap-1.5 font-bold text-emerald-950 mb-0.5">
+                            <BookOpen className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>Descrição da Leitura do Anexo:</span>
+                          </div>
+                          <p className="text-slate-700 pl-5">
+                            {doc.detalhamentoLeitura}
+                          </p>
+                        </div>
+                      )}
 
                       {doc.motivoDescarte && (
                         <div className="mt-1.5 px-2.5 py-1 rounded bg-rose-50 border border-rose-200/80 text-[11px] text-rose-800 font-medium flex items-center gap-1.5">
@@ -347,7 +360,7 @@ export const AvaliacaoLoteModal: React.FC<AvaliacaoLoteModalProps> = ({
                     <div className="px-3.5 pb-3.5 pt-2 border-t border-slate-100 bg-slate-50/50 rounded-b-xl text-xs space-y-2">
                       <div>
                         <span className="font-bold text-slate-700 text-[11px] uppercase tracking-wider block mb-0.5">
-                          Fundamentação Regulatória (Decreto nº 13.048/2026):
+                          Fundamentação Regulatória (Resolução CS/IFS nº 394/2026):
                         </span>
                         <p className="text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200/80">
                           {doc.justificativa}
@@ -357,7 +370,7 @@ export const AvaliacaoLoteModal: React.FC<AvaliacaoLoteModalProps> = ({
                       {doc.orientacaoAoServidor && (
                         <div className="bg-blue-50/80 border border-blue-200 p-2.5 rounded-lg text-blue-900">
                           <span className="font-bold text-[11px] block mb-0.5">
-                            Orientação para a Comissão CPRSC:
+                            Orientação para a Comissão Avaliadora:
                           </span>
                           <p className="text-xs text-blue-800 leading-relaxed">
                             {doc.orientacaoAoServidor}
